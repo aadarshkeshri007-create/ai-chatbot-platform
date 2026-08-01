@@ -1,7 +1,4 @@
 "use client";
-import Button from "@/components/Button";
-import Input from "@/components/Input";
-import Link from "next/link";
 import { useState } from "react";
 import type { Message } from "@/types/message";
 import Sidebar from "@/components/chat/Sidebar";
@@ -43,24 +40,20 @@ export default function ChatPage() {
         }, 1000);
     }
     return (
-        <>
-            <div className="flex min-h-screen">
+        <div className="flex min-h-screen bg-slate-50">
+            <Sidebar />
 
-                <Sidebar />
+            <main className="flex flex-1 flex-col">
+                <ChatHeader />
 
-                <main className="flex-1 flex flex-col">
+                <ChatMessages messages={messages} />
 
-                    <ChatHeader />
-
-                    <ChatMessages messages={messages} />
-
-                    <ChatInput
-                        message={message}
-                        setMessage={setMessage}
-                        onSend={handleSendMessage}
-                    />
-                </main>
-            </div >
-        </>
+                <ChatInput
+                    message={message}
+                    setMessage={setMessage}
+                    onSend={handleSendMessage}
+                />
+            </main>
+        </div>
     );
 }
