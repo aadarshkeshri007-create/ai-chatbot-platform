@@ -2,38 +2,45 @@ import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
-    const body = await request.json();
-    const message = body.message;
+  try {
+    const { message } = await request.json();
+
+    if (!message || typeof message !== "string") {
+      return NextResponse.json(
+        { error: "Message is required." },
+        { status: 400 }
+      );
+    }
 
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-        throw new Error("GEMINI_API_KEY is not set");
+      throw new Error("GEMINI_API_KEY is not set");
     }
 
-    try {
-        const ai = new GoogleGenAI({
-            apiKey,
-        });
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: { timeout: 30_000 },
+    });
 
-        const result = await ai.models.generateContent({
-            model: "gemini-3.5-flash",
-            contents: message,
-        });
+    const result = await ai.models.generateContent({
+      model: "gemini-3.1-flash-lite",
+      contents: message,
+    });
 
-        return NextResponse.json({
-            response: result.text,
-        });
-    } catch (error) {
-        console.error("Error generating content:", error);
+    return NextResponse.json({
+      response: result.text,
+    });
+  } catch (error) {
+    console.error("Error generating content:", error);
 
-        return NextResponse.json(
-            {
-                response: "Something went wrong while generating the AI response.",
-            },
-            {
-                status: 500,
-            }
-        );
-    }
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
 }
