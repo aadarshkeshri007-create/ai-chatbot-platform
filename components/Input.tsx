@@ -6,6 +6,8 @@ type InputProps = {
   value: string;
   className?: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  disabled?: boolean;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 };
 
 export default function Input({
@@ -15,7 +17,9 @@ export default function Input({
   placeholder,
   value,
   onChange,
-  className
+  className, 
+  disabled = false,
+  onKeyDown
 }: InputProps) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -31,6 +35,8 @@ export default function Input({
         placeholder={placeholder}
         value={value}
         onChange={onChange}
+        onKeyDown={onKeyDown}
+        disabled={disabled}
         className={`w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm transition-colors duration-150 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 ${className || ""}`}
       />
     </div>

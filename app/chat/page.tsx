@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { Message } from "@/types/message";
 import Sidebar from "@/components/chat/Sidebar";
 import ChatHeader from "@/components/chat/ChatHeader";
@@ -8,6 +8,8 @@ import ChatInput from "@/components/chat/ChatInput";
 
 export default function ChatPage() {
     const [message, setMessage] = useState("");
+    const [loading, setLoading] = useState(false);
+    const messagesContainerRef = useRef<HTMLElement | null>(null);
     const [messages, setMessages] = useState<Message[]>([
         {
             id: "1",
@@ -15,43 +17,87 @@ export default function ChatPage() {
             content: "Hello! How can I assist you today?"
         }
     ]);
-    const handleSendMessage = () => {
+    useEffect(() => {
+        messagesContainerRef.current?.scrollTo({
+            top: messagesContainerRef.current.scrollHeight,
+            behavior: "smooth",
+        });
+    }, [messages]);
+    const handleSendMessage = async () => {
         if (!message.trim()) {
             return;
         }
+
+        const userMessage = message;
+
         setMessages((prevMessages) => [
             ...prevMessages,
             {
                 id: crypto.randomUUID(),
                 role: "user",
-                content: message
-            }
+                content: userMessage,
+            },
         ]);
+
         setMessage("");
-        setTimeout(() => {
+        setLoading(true);
+        try {
+
+            const response = await fetch("/api/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    message: userMessage,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to fetch AI response");
+            }
+
+            const data = await response.json();
+
             setMessages((prevMessages) => [
                 ...prevMessages,
                 {
                     id: crypto.randomUUID(),
                     role: "assistant",
-                    content: "This is a simulated response from the AI assistant."
-                }
+                    content: data.response,
+                },
             ]);
-        }, 1000);
-    }
+        } catch (error) {
+            console.error(error);
+
+            setMessages((prevMessages) => [
+                ...prevMessages,
+                {
+                    id: crypto.randomUUID(),
+                    role: "assistant",
+                    content: "Something went wrong. Please try again.",
+                },
+            ]);
+        }
+        finally {
+            setLoading(false);
+        }
+    };
     return (
-        <div className="flex min-h-screen bg-slate-50">
+        <div className="flex h-screen bg-slate-50">
             <Sidebar />
 
-            <main className="flex flex-1 flex-col">
+            <main className="flex min-h-0 flex-1 flex-col">
                 <ChatHeader />
 
-                <ChatMessages messages={messages} />
+                <ChatMessages
+                    messages={messages} messagesContainerRef={messagesContainerRef} />
 
                 <ChatInput
                     message={message}
                     setMessage={setMessage}
                     onSend={handleSendMessage}
+                    loading={loading}
                 />
             </main>
         </div>

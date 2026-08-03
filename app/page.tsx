@@ -2,75 +2,77 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-50 px-6 py-16">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-0 h-[32rem] w-[64rem] -translate-x-1/2 rounded-full bg-teal-400/20 blur-[120px]"
-      />
-
-      <div className="relative flex flex-col items-center text-center">
-        <div className="mb-8 flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-600 shadow-sm shadow-teal-600/30">
-            <span className="text-sm font-bold text-white">AI</span>
+    <div className="flex min-h-screen flex-col bg-slate-50">
+      <header className="flex items-center justify-between px-6 py-5 sm:px-10">
+        <div className="flex items-center gap-2">
+          <div
+            className="flex h-7 w-7 items-center justify-center rounded-md bg-teal-600"
+            aria-hidden="true"
+          >
+            <span className="text-xs font-bold text-white">AI</span>
           </div>
-          <span className="font-mono text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
+          <span className="text-sm font-semibold text-slate-900">
             Support Platform
           </span>
         </div>
 
-        <h1 className="max-w-2xl text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-          AI Customer Support,
-          <span className="block text-teal-600">Turn Every Customer Question Into an Instant Answer</span>
-        </h1>
-
-        <p className="mt-5 max-w-md text-lg text-slate-600">
-          Manage customer support with AI — respond faster, resolve more,
-          and keep every conversation in one place.
-        </p>
-
-        <div className="mt-12 grid w-full max-w-2xl gap-4 sm:grid-cols-3">
+        <nav aria-label="Account">
           <Link
             href="/login"
-            className="group flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-lg hover:shadow-teal-600/10"
+            className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors duration-150 hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors group-hover:bg-teal-50 group-hover:text-teal-600">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="7.5" cy="15.5" r="5.5" />
-                <path d="M21 2l-9.6 9.6" />
-                <path d="M15.5 7.5l3 3L22 7l-3-3" />
-              </svg>
-            </span>
-            <span className="text-sm font-semibold text-slate-900">Login</span>
+            Log in
+          </Link>
+        </nav>
+      </header>
+
+      <main className="relative flex flex-1 flex-col items-center justify-center px-6 py-16 text-center sm:px-10">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 top-1/3 h-64 w-[36rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-teal-500/10 blur-[90px]"
+        />
+
+        <div className="relative flex max-w-xl flex-col items-center">
+          <h1 className="text-4xl font-semibold tracking-tight text-slate-900 sm:text-5xl">
+            AI customer support,
+            <span className="block text-teal-600">handled around the clock.</span>
+          </h1>
+
+          <p className="mt-5 max-w-md text-lg leading-relaxed text-slate-600">
+            Resolve customer questions instantly with an AI assistant trained
+            on your knowledge base — no waiting, no queue.
+          </p>
+
+          <Link
+            href="/chat"
+            className="group mt-10 inline-flex items-center gap-2 rounded-lg bg-teal-600 px-6 py-3 text-sm font-semibold text-white shadow-sm shadow-teal-600/20 transition-all duration-150 hover:bg-teal-700 hover:shadow-md hover:shadow-teal-600/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 active:scale-[0.98]"
+          >
+            Start AI Chat
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              className="transition-transform duration-150 group-hover:translate-x-0.5"
+            >
+              <path d="M5 12h14" />
+              <path d="M13 6l6 6-6 6" />
+            </svg>
           </Link>
 
           <Link
             href="/dashboard"
-            className="group flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-lg hover:shadow-teal-600/10"
+            className="mt-5 rounded text-sm text-slate-500 underline-offset-4 transition-colors hover:text-slate-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors group-hover:bg-teal-50 group-hover:text-teal-600">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="9" rx="1.5" />
-                <rect x="14" y="3" width="7" height="5" rx="1.5" />
-                <rect x="14" y="12" width="7" height="9" rx="1.5" />
-                <rect x="3" y="16" width="7" height="5" rx="1.5" />
-              </svg>
-            </span>
-            <span className="text-sm font-semibold text-slate-900">Dashboard</span>
-          </Link>
-
-          <Link
-            href="/chat"
-            className="group flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-lg hover:shadow-teal-600/10"
-          >
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors group-hover:bg-teal-50 group-hover:text-teal-600">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" />
-              </svg>
-            </span>
-            <span className="text-sm font-semibold text-slate-900">AI Chat</span>
+            Go to dashboard
           </Link>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

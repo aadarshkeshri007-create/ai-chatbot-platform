@@ -1,13 +1,15 @@
 import { Message } from "@/types/message";
 type ChatMessagesProps = {
   messages: Message[];
+  messagesContainerRef: React.RefObject<HTMLElement | null>;
 };
 
 export default function ChatMessages({
-  messages,
+  messages, messagesContainerRef
 }: ChatMessagesProps) {
   return (
-    <section className="flex-1 overflow-y-auto bg-slate-50 px-4 py-6 sm:px-6">
+    <section ref={messagesContainerRef}
+    className="flex-1 overflow-y-auto bg-slate-50 px-4 py-6 sm:px-6">
       <div className="mx-auto flex max-w-3xl flex-col gap-3">
         {messages.map((msg) => (
           <div
