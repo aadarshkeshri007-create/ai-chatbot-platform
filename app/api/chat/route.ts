@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     if (!message || typeof message !== "string") {
       return NextResponse.json(
         { error: "Message is required." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -23,13 +23,32 @@ export async function POST(request: Request) {
       httpOptions: { timeout: 30_000 },
     });
 
-    const result = await ai.models.generateContent({
-      model: "gemini-3.1-flash-lite",
+    const result = await ai.models.generateContentStream({
+      model: "gemini-3.5-flash-lite",
       contents: message,
     });
 
-    return NextResponse.json({
-      response: result.text,
+    const encoder = new TextEncoder();
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of result) {
+            controller.enqueue(encoder.encode(chunk.text ?? ""));
+          }
+
+          controller.close();
+        } catch (error) {
+          console.error("Error reading from result stream:", error);
+          controller.error(error);
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+      },
     });
   } catch (error) {
     console.error("Error generating content:", error);
@@ -40,7 +59,7 @@ export async function POST(request: Request) {
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }
