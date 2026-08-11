@@ -2,22 +2,37 @@
 import Button from "@/components/Button";
 import Input from "@/components/Input";
 import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const inputStyles =
     "w-full border border-[#E5E3DD] rounded-xl px-4 py-3 text-[15px] bg-[#FAFAF8]/60 text-[#1C1F26] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-[3px] focus:ring-[#0F6E68]/15 focus:border-[#0F6E68] focus:bg-white transition-all duration-200 ease-out";
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    setError("");
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    console.log(email);
-    console.log(password);
-    setLoading(false);
+
+    const supabase = createClient();
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    window.location.href = "/";
   };
 
   return (
@@ -89,6 +104,12 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className={inputStyles}
               />
+
+              {error && (
+                <p className="text-sm text-red-600">
+                  {error}
+                </p>
+              )}
 
               <div className="flex items-center justify-between -mt-0.5">
                 <label className="flex items-center gap-2 cursor-pointer group select-none">
