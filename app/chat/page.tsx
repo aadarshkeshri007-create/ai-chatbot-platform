@@ -1,6 +1,17 @@
 "use client";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+
+import {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+} from "react";
+
+import { createClient } from "@/lib/supabase/client";
+
 import type { Message } from "@/types/message";
+
 import Sidebar from "@/components/chat/Sidebar";
 import ChatHeader from "@/components/chat/ChatHeader";
 import ChatMessages from "@/components/chat/ChatMessage";
@@ -8,18 +19,33 @@ import ChatInput from "@/components/chat/ChatInput";
 
 const BOTTOM_THRESHOLD_PX = 24;
 
+type Conversation = {
+    id: string;
+    title: string;
+    updated_at: string;
+};
+
 export default function ChatPage() {
     const [message, setMessage] = useState("");
     const [loading, setLoading] = useState(false);
+
+    const [conversationId, setConversationId] = useState<string | null>(
+        null,
+    );
+
+    const [conversations, setConversations] = useState<Conversation[]>([]);
+
     const messagesContainerRef = useRef<HTMLElement | null>(null);
     const shouldAutoScrollRef = useRef(true);
+
     const [messages, setMessages] = useState<Message[]>([
         {
             id: "1",
             role: "assistant",
-            content: "Hello! How can I assist you today?"
-        }
+            content: "Hello! How can I assist you today?",
+        },
     ]);
+
     const scrollToBottom = useCallback(() => {
         const container = messagesContainerRef.current;
 
@@ -36,9 +62,12 @@ export default function ChatPage() {
         }
 
         const distanceFromBottom =
-            container.scrollHeight - container.scrollTop - container.clientHeight;
+            container.scrollHeight -
+            container.scrollTop -
+            container.clientHeight;
 
-        shouldAutoScrollRef.current = distanceFromBottom <= BOTTOM_THRESHOLD_PX;
+        shouldAutoScrollRef.current =
+            distanceFromBottom <= BOTTOM_THRESHOLD_PX;
     }, []);
 
     useLayoutEffect(() => {
@@ -47,14 +76,110 @@ export default function ChatPage() {
         }
     }, [messages, scrollToBottom]);
 
+    // Load the user's conversations
+    useEffect(() => {
+        const loadConversations = async () => {
+            const supabase = createClient();
+
+            const { data, error } = await supabase
+                .from("conversations")
+                .select("id, title, updated_at")
+                .order("updated_at", { ascending: false });
+
+            if (error) {
+                console.error(
+                    "Error loading conversations:",
+                    error,
+                );
+                return;
+            }
+
+            setConversations(data ?? []);
+        };
+
+        loadConversations();
+    }, []);
+
+    // Start a new chat
+    const handleNewChat = () => {
+        setConversationId(null);
+
+        setMessages([
+            {
+                id: "new-chat",
+                role: "assistant",
+                content: "Hello! How can I assist you today?",
+            },
+        ]);
+
+        setMessage("");
+        shouldAutoScrollRef.current = true;
+    };
+
+    // Load a conversation
+    const handleSelectConversation = async (
+        selectedConversationId: string,
+    ) => {
+        if (loading) {
+            return;
+        }
+
+        setConversationId(selectedConversationId);
+        setLoading(true);
+
+        try {
+            const supabase = createClient();
+
+            const { data, error } = await supabase
+                .from("messages")
+                .select("id, role, content")
+                .eq(
+                    "conversation_id",
+                    selectedConversationId,
+                )
+                .order("created_at", { ascending: true });
+
+            if (error) {
+                throw error;
+            }
+
+            setMessages(
+                (data ?? []).map((msg) => ({
+                    id: msg.id,
+                    role: msg.role,
+                    content: msg.content,
+                })),
+            );
+
+            shouldAutoScrollRef.current = true;
+        } catch (error) {
+            console.error(
+                "Error loading conversation:",
+                error,
+            );
+
+            setMessages([
+                {
+                    id: "error",
+                    role: "assistant",
+                    content:
+                        "Unable to load this conversation.",
+                },
+            ]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSendMessage = async () => {
-        if (!message.trim()) {
+        if (!message.trim() || loading) {
             return;
         }
 
         const userMessage = message;
 
         const assistantMessageId = crypto.randomUUID();
+
         shouldAutoScrollRef.current = true;
 
         setMessages((prevMessages) => [
@@ -73,29 +198,51 @@ export default function ChatPage() {
 
         setLoading(true);
         setMessage("");
+
         try {
             const response = await fetch("/api/chat", {
                 method: "POST",
+
                 headers: {
                     "Content-Type": "application/json",
                 },
+
                 body: JSON.stringify({
                     message: userMessage,
+                    conversationId,
                 }),
             });
 
             if (!response.ok) {
-                throw new Error("Failed to fetch AI response");
+                throw new Error(
+                    "Failed to fetch AI response",
+                );
             }
 
-            const reader = response.body?.getReader();
+            const returnedConversationId =
+                response.headers.get(
+                    "X-Conversation-Id",
+                );
+
+            if (returnedConversationId) {
+                setConversationId(
+                    returnedConversationId,
+                );
+            }
+
+            const reader =
+                response.body?.getReader();
 
             if (!reader) {
-                throw new Error("Response body is missing");
+                throw new Error(
+                    "Response body is missing",
+                );
             }
 
             const decoder = new TextDecoder();
+
             let pendingContent = "";
+
             let updateFrame: number | null = null;
 
             const flushPendingContent = () => {
@@ -106,25 +253,41 @@ export default function ChatPage() {
                 }
 
                 const content = pendingContent;
+
                 pendingContent = "";
 
                 setMessages((prevMessages) =>
                     prevMessages.map((msg) =>
                         msg.id === assistantMessageId
-                            ? { ...msg, content: msg.content + content }
-                            : msg
-                    )
+                            ? {
+                                  ...msg,
+                                  content:
+                                      msg.content +
+                                      content,
+                              }
+                            : msg,
+                    ),
                 );
             };
 
             while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
+                const { done, value } =
+                    await reader.read();
 
-                pendingContent += decoder.decode(value, { stream: true });
+                if (done) {
+                    break;
+                }
+
+                pendingContent += decoder.decode(
+                    value,
+                    { stream: true },
+                );
 
                 if (updateFrame === null) {
-                    updateFrame = requestAnimationFrame(flushPendingContent);
+                    updateFrame =
+                        requestAnimationFrame(
+                            flushPendingContent,
+                        );
                 }
             }
 
@@ -135,8 +298,19 @@ export default function ChatPage() {
             }
 
             flushPendingContent();
-        }
-        catch (error) {
+
+            // Refresh the conversation list
+            const supabase = createClient();
+
+            const { data } = await supabase
+                .from("conversations")
+                .select("id, title, updated_at")
+                .order("updated_at", {
+                    ascending: false,
+                });
+
+            setConversations(data ?? []);
+        } catch (error) {
             console.error(error);
 
             setMessages((prevMessages) => [
@@ -144,24 +318,34 @@ export default function ChatPage() {
                 {
                     id: crypto.randomUUID(),
                     role: "assistant",
-                    content: "Something went wrong. Please try again.",
+                    content:
+                        "Something went wrong. Please try again.",
                 },
             ]);
-        }
-        finally {
+        } finally {
             setLoading(false);
         }
-    }
+    };
+
     return (
         <div className="flex h-screen bg-slate-50">
-            <Sidebar />
+            <Sidebar
+                conversations={conversations}
+                activeConversationId={conversationId}
+                onSelectConversation={
+                    handleSelectConversation
+                }
+                onNewChat={handleNewChat}
+            />
 
             <main className="flex min-h-0 flex-1 flex-col">
                 <ChatHeader />
 
                 <ChatMessages
                     messages={messages}
-                    messagesContainerRef={messagesContainerRef}
+                    messagesContainerRef={
+                        messagesContainerRef
+                    }
                     onScroll={handleMessagesScroll}
                 />
 

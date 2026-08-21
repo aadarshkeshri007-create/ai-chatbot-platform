@@ -15,7 +15,6 @@ export async function POST(request: Request) {
 
         const supabase = await createClient();
 
-        // 1. Verify the authenticated user
         const {
             data: { user },
             error: authError,
@@ -28,7 +27,6 @@ export async function POST(request: Request) {
             );
         }
 
-        // 2. Find or create a conversation
         let activeConversationId = conversationId;
 
         if (activeConversationId) {
@@ -69,8 +67,7 @@ export async function POST(request: Request) {
 
             activeConversationId = conversation.id;
         }
-
-        // 3. Save the user's message
+ 
         const { error: userMessageError } = await supabase
             .from("messages")
             .insert({
@@ -91,25 +88,49 @@ export async function POST(request: Request) {
             );
         }
 
-        // 4. Check Gemini API key
         const apiKey = process.env.GEMINI_API_KEY;
 
         if (!apiKey) {
             throw new Error("GEMINI_API_KEY is not set");
         }
-
-        // 5. Create Gemini client
+        
         const ai = new GoogleGenAI({
             apiKey,
             httpOptions: { timeout: 30_000 },
         });
 
-        // 6. Generate streaming response
+        const { data: conversationMessages, error: historyError } =
+            await supabase
+                .from("messages")
+                .select("role, content")
+                .eq("conversation_id", activeConversationId)
+                .order("created_at", { ascending: true });
+
+        if (historyError) {
+            console.error(
+                "Error loading conversation history:",
+                historyError,
+            );
+
+            return NextResponse.json(
+                { error: "Failed to load conversation history." },
+                { status: 500 },
+            );
+        }
+
+        const contents = conversationMessages.map((msg) => ({
+            role: msg.role === "assistant" ? "model" : "user",
+            parts: [
+                {
+                    text: msg.content,
+                },
+            ],
+        }));
+
         const result = await ai.models.generateContentStream({
             model: "gemini-3.5-flash-lite",
-            contents: message,
+            contents,
         });
-
         const encoder = new TextEncoder();
 
         let assistantResponse = "";
