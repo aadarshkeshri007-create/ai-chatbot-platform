@@ -116,6 +116,54 @@ export default function ChatPage() {
         shouldAutoScrollRef.current = true;
     };
 
+    const handleDeleteConversation = async (
+    conversationIdToDelete: string,
+) => {
+    const supabase = createClient();
+
+    const { error } = await supabase
+        .from("conversations")
+        .delete()
+        .eq("id", conversationIdToDelete);
+
+    if (error) {
+        console.error(
+            "Error deleting conversation:",
+            error,
+        );
+
+        window.alert(
+            "Unable to delete the conversation. Please try again.",
+        );
+
+        return;
+    }
+
+    setConversations((prevConversations) =>
+        prevConversations.filter(
+            (conversation) =>
+                conversation.id !==
+                conversationIdToDelete,
+        ),
+    );
+
+    if (conversationId === conversationIdToDelete) {
+        setConversationId(null);
+
+        setMessages([
+            {
+                id: "new-chat",
+                role: "assistant",
+                content:
+                    "Hello! How can I assist you today?",
+            },
+        ]);
+
+        setMessage("");
+        shouldAutoScrollRef.current = true;
+    }
+};
+
     // Load a conversation
     const handleSelectConversation = async (
         selectedConversationId: string,
@@ -169,6 +217,18 @@ export default function ChatPage() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const generateConversationTitle = (text: string) => {
+        const cleanedText = text
+            .replace(/\s+/g, " ")
+            .trim();
+
+        if (cleanedText.length <= 40) {
+            return cleanedText;
+        }
+
+        return cleanedText.slice(0, 40).trimEnd() + "...";
     };
 
     const handleSendMessage = async () => {
@@ -230,6 +290,28 @@ export default function ChatPage() {
                 );
             }
 
+            if (!conversationId && returnedConversationId) {
+                const supabase = createClient();
+
+                const title = generateConversationTitle(
+                    userMessage,
+                );
+
+                const { error: titleError } = await supabase
+                    .from("conversations")
+                    .update({
+                        title,
+                    })
+                    .eq("id", returnedConversationId);
+
+                if (titleError) {
+                    console.error(
+                        "Error updating conversation title:",
+                        titleError,
+                    );
+                }
+            }
+
             const reader =
                 response.body?.getReader();
 
@@ -260,11 +342,11 @@ export default function ChatPage() {
                     prevMessages.map((msg) =>
                         msg.id === assistantMessageId
                             ? {
-                                  ...msg,
-                                  content:
-                                      msg.content +
-                                      content,
-                              }
+                                ...msg,
+                                content:
+                                    msg.content +
+                                    content,
+                            }
                             : msg,
                     ),
                 );
@@ -336,6 +418,7 @@ export default function ChatPage() {
                     handleSelectConversation
                 }
                 onNewChat={handleNewChat}
+                onDeleteConversation={handleDeleteConversation}
             />
 
             <main className="flex min-h-0 flex-1 flex-col">
