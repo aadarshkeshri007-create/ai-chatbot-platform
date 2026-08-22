@@ -538,7 +538,7 @@ ${
 
         headers.set(
             "X-Conversation-Id",
-            activeConversationId,
+            activeConversationId!,
         );
 
         headers.set(

@@ -32,7 +32,7 @@ export default function SignupPage() {
 
         const supabase = createClient();
 
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
             email,
             password,
             options: {
@@ -45,6 +45,16 @@ export default function SignupPage() {
         if (error) {
             setError(error.message);
             setLoading(false);
+            return;
+        }
+
+        /*
+         * If the Supabase project auto-confirms users,
+         * a session is returned immediately — go to chat.
+         * Otherwise show the "check your email" screen.
+         */
+        if (data.session) {
+            window.location.href = "/chat";
             return;
         }
 

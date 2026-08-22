@@ -275,7 +275,7 @@ export default function UploadPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10">
+    <div className="flex-1 overflow-y-auto bg-slate-50 px-6 py-10">
       <div className="mx-auto max-w-5xl">
         <header className="mb-8">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
@@ -417,6 +417,6 @@ export default function UploadPage() {
           )}
         </section>
       </div>
-    </main>
+    </div>
   );
 }

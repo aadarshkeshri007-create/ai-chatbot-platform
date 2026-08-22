@@ -1,8 +1,23 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+
 type ChatHeaderProps = {
   onToggleSidebar: () => void;
 };
 
+const PAGE_TITLES: Record<string, string> = {
+  "/chat": "AI Assistant",
+  "/history": "Chat History",
+  "/upload": "Knowledge Base",
+  "/settings": "Settings",
+  "/profile": "Profile",
+};
+
 export default function ChatHeader({ onToggleSidebar }: ChatHeaderProps) {
+  const pathname = usePathname();
+  const pageTitle = PAGE_TITLES[pathname] ?? "AI Assistant";
+
   return (
     <header className="flex h-14 items-center gap-3 border-b border-slate-200 bg-white px-4 sm:px-5">
       {/* Mobile hamburger */}
@@ -33,7 +48,7 @@ export default function ChatHeader({ onToggleSidebar }: ChatHeaderProps) {
       <div className="flex items-center gap-1.5">
         <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true" />
         <span className="text-sm font-medium text-slate-900">
-          AI Assistant
+          {pageTitle}
         </span>
       </div>
     </header>

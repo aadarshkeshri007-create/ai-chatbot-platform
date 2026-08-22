@@ -12,18 +12,11 @@ import { createClient } from "@/lib/supabase/client";
 
 import type { Message } from "@/types/message";
 
-import Sidebar from "@/components/chat/Sidebar";
-import ChatHeader from "@/components/chat/ChatHeader";
+import { useSidebarContext } from "@/components/SidebarContext";
 import ChatMessages from "@/components/chat/ChatMessage";
 import ChatInput from "@/components/chat/ChatInput";
 
 const BOTTOM_THRESHOLD_PX = 24;
-
-type Conversation = {
-    id: string;
-    title: string;
-    updated_at: string;
-};
 
 type ChatSource = {
     documentId: string;
@@ -33,13 +26,9 @@ type ChatSource = {
 export default function ChatPage() {
     const [message, setMessage] = useState("");
     const [loading, setLoading] = useState(false);
-    const [sidebarOpen, setSidebarOpen] = useState(false);
 
     const [conversationId, setConversationId] =
         useState<string | null>(null);
-
-    const [conversations, setConversations] =
-        useState<Conversation[]>([]);
 
     const [sources, setSources] =
         useState<ChatSource[]>([]);
@@ -59,6 +48,19 @@ export default function ChatPage() {
                     "Hello! How can I assist you today?",
             },
         ]);
+
+    /*
+     * ── Bridge to sidebar context ────────────
+     * Provide conversation state and callbacks
+     * to the Sidebar via context.
+     */
+    const {
+        setConversations,
+        setActiveConversationId,
+        setOnSelectConversation,
+        setOnNewChat,
+        setOnDeleteConversation,
+    } = useSidebarContext();
 
     const scrollToBottom = useCallback(() => {
         const container =
@@ -123,10 +125,15 @@ export default function ChatPage() {
         };
 
         loadConversations();
-    }, []);
+    }, [setConversations]);
+
+    // Sync active conversation ID to context
+    useEffect(() => {
+        setActiveConversationId(conversationId);
+    }, [conversationId, setActiveConversationId]);
 
     // Start a new chat
-    const handleNewChat = () => {
+    const handleNewChat = useCallback(() => {
         setConversationId(null);
 
         setMessages([
@@ -141,10 +148,10 @@ export default function ChatPage() {
         setMessage("");
         setSources([]);
         shouldAutoScrollRef.current = true;
-    };
+    }, []);
 
     const handleDeleteConversation =
-        async (
+        useCallback(async (
             conversationIdToDelete: string,
         ) => {
             const supabase = createClient();
@@ -200,11 +207,11 @@ export default function ChatPage() {
                 shouldAutoScrollRef.current =
                     true;
             }
-        };
+        }, [conversationId, setConversations]);
 
     // Load a conversation
     const handleSelectConversation =
-        async (
+        useCallback(async (
             selectedConversationId: string,
         ) => {
             if (loading) {
@@ -273,7 +280,28 @@ export default function ChatPage() {
             } finally {
                 setLoading(false);
             }
-        };
+        }, [loading]);
+
+    /*
+     * ── Register callbacks with context ──────
+     * So the Sidebar (rendered in the layout)
+     * can trigger these functions.
+     */
+    useEffect(() => {
+        setOnSelectConversation(
+            handleSelectConversation,
+        );
+    }, [handleSelectConversation, setOnSelectConversation]);
+
+    useEffect(() => {
+        setOnNewChat(handleNewChat);
+    }, [handleNewChat, setOnNewChat]);
+
+    useEffect(() => {
+        setOnDeleteConversation(
+            handleDeleteConversation,
+        );
+    }, [handleDeleteConversation, setOnDeleteConversation]);
 
     const generateConversationTitle =
         (text: string) => {
@@ -592,86 +620,55 @@ export default function ChatPage() {
     };
 
     return (
-        <div className="flex h-screen bg-slate-50">
-            <Sidebar
-                conversations={conversations}
-                activeConversationId={
-                    conversationId
+        <>
+            <ChatMessages
+                messages={messages}
+                messagesContainerRef={
+                    messagesContainerRef
                 }
-                onSelectConversation={
-                    handleSelectConversation
+                onScroll={
+                    handleMessagesScroll
                 }
-                onNewChat={
-                    handleNewChat
-                }
-                onDeleteConversation={
-                    handleDeleteConversation
-                }
-                isOpen={sidebarOpen}
-                onClose={() =>
-                    setSidebarOpen(false)
+                loading={loading}
+                onSuggestionClick={
+                    handleSuggestionClick
                 }
             />
 
-            <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-                <ChatHeader
-                    onToggleSidebar={() =>
-                        setSidebarOpen(
-                            (prev) =>
-                                !prev,
-                        )
-                    }
-                />
+            {sources.length > 0 && (
+                <div className="border-t border-slate-200 bg-white px-6 py-3">
+                    <p className="text-xs font-semibold text-slate-500">
+                        Sources
+                    </p>
 
-                <ChatMessages
-                    messages={messages}
-                    messagesContainerRef={
-                        messagesContainerRef
-                    }
-                    onScroll={
-                        handleMessagesScroll
-                    }
-                    loading={loading}
-                    onSuggestionClick={
-                        handleSuggestionClick
-                    }
-                />
-
-                {sources.length > 0 && (
-                    <div className="border-t border-slate-200 bg-white px-6 py-3">
-                        <p className="text-xs font-semibold text-slate-500">
-                            Sources
-                        </p>
-
-                        <div className="mt-2 flex flex-wrap gap-2">
-                            {sources.map(
-                                (source) => (
-                                    <span
-                                        key={
-                                            source.documentId
-                                        }
-                                        className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
-                                    >
-                                        📄{" "}
-                                        {
-                                            source.fileName
-                                        }
-                                    </span>
-                                ),
-                            )}
-                        </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        {sources.map(
+                            (source) => (
+                                <span
+                                    key={
+                                        source.documentId
+                                    }
+                                    className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
+                                >
+                                    📄{" "}
+                                    {
+                                        source.fileName
+                                    }
+                                </span>
+                            ),
+                        )}
                     </div>
-                )}
+                </div>
+            )}
 
-                <ChatInput
-                    message={message}
-                    setMessage={setMessage}
-                    onSend={
-                        handleSendMessage
-                    }
-                    loading={loading}
-                />
-            </main>
-        </div>
+            <ChatInput
+                message={message}
+                setMessage={setMessage}
+                onSend={
+                    handleSendMessage
+                }
+                loading={loading}
+            />
+        </>
     );
 }
