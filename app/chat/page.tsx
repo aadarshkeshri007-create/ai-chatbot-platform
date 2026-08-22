@@ -25,50 +25,69 @@ type Conversation = {
     updated_at: string;
 };
 
+type ChatSource = {
+    documentId: string;
+    fileName: string;
+};
+
 export default function ChatPage() {
     const [message, setMessage] = useState("");
     const [loading, setLoading] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
-    const [conversationId, setConversationId] = useState<string | null>(
-        null,
-    );
+    const [conversationId, setConversationId] =
+        useState<string | null>(null);
 
-    const [conversations, setConversations] = useState<Conversation[]>([]);
+    const [conversations, setConversations] =
+        useState<Conversation[]>([]);
 
-    const messagesContainerRef = useRef<HTMLElement | null>(null);
-    const shouldAutoScrollRef = useRef(true);
+    const [sources, setSources] =
+        useState<ChatSource[]>([]);
 
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: "1",
-            role: "assistant",
-            content: "Hello! How can I assist you today?",
-        },
-    ]);
+    const messagesContainerRef =
+        useRef<HTMLElement | null>(null);
+
+    const shouldAutoScrollRef =
+        useRef(true);
+
+    const [messages, setMessages] =
+        useState<Message[]>([
+            {
+                id: "new-chat",
+                role: "assistant",
+                content:
+                    "Hello! How can I assist you today?",
+            },
+        ]);
 
     const scrollToBottom = useCallback(() => {
-        const container = messagesContainerRef.current;
+        const container =
+            messagesContainerRef.current;
 
         if (container) {
-            container.scrollTop = container.scrollHeight;
+            container.scrollTop =
+                container.scrollHeight;
         }
     }, []);
 
-    const handleMessagesScroll = useCallback(() => {
-        const container = messagesContainerRef.current;
+    const handleMessagesScroll =
+        useCallback(() => {
+            const container =
+                messagesContainerRef.current;
 
-        if (!container) {
-            return;
-        }
+            if (!container) {
+                return;
+            }
 
-        const distanceFromBottom =
-            container.scrollHeight -
-            container.scrollTop -
-            container.clientHeight;
+            const distanceFromBottom =
+                container.scrollHeight -
+                container.scrollTop -
+                container.clientHeight;
 
-        shouldAutoScrollRef.current =
-            distanceFromBottom <= BOTTOM_THRESHOLD_PX;
-    }, []);
+            shouldAutoScrollRef.current =
+                distanceFromBottom <=
+                BOTTOM_THRESHOLD_PX;
+        }, []);
 
     useLayoutEffect(() => {
         if (shouldAutoScrollRef.current) {
@@ -81,16 +100,22 @@ export default function ChatPage() {
         const loadConversations = async () => {
             const supabase = createClient();
 
-            const { data, error } = await supabase
-                .from("conversations")
-                .select("id, title, updated_at")
-                .order("updated_at", { ascending: false });
+            const { data, error } =
+                await supabase
+                    .from("conversations")
+                    .select(
+                        "id, title, updated_at",
+                    )
+                    .order("updated_at", {
+                        ascending: false,
+                    });
 
             if (error) {
                 console.error(
                     "Error loading conversations:",
                     error,
                 );
+
                 return;
             }
 
@@ -108,128 +133,169 @@ export default function ChatPage() {
             {
                 id: "new-chat",
                 role: "assistant",
-                content: "Hello! How can I assist you today?",
-            },
-        ]);
-
-        setMessage("");
-        shouldAutoScrollRef.current = true;
-    };
-
-    const handleDeleteConversation = async (
-    conversationIdToDelete: string,
-) => {
-    const supabase = createClient();
-
-    const { error } = await supabase
-        .from("conversations")
-        .delete()
-        .eq("id", conversationIdToDelete);
-
-    if (error) {
-        console.error(
-            "Error deleting conversation:",
-            error,
-        );
-
-        window.alert(
-            "Unable to delete the conversation. Please try again.",
-        );
-
-        return;
-    }
-
-    setConversations((prevConversations) =>
-        prevConversations.filter(
-            (conversation) =>
-                conversation.id !==
-                conversationIdToDelete,
-        ),
-    );
-
-    if (conversationId === conversationIdToDelete) {
-        setConversationId(null);
-
-        setMessages([
-            {
-                id: "new-chat",
-                role: "assistant",
                 content:
                     "Hello! How can I assist you today?",
             },
         ]);
 
         setMessage("");
+        setSources([]);
         shouldAutoScrollRef.current = true;
-    }
-};
+    };
 
-    // Load a conversation
-    const handleSelectConversation = async (
-        selectedConversationId: string,
-    ) => {
-        if (loading) {
-            return;
-        }
-
-        setConversationId(selectedConversationId);
-        setLoading(true);
-
-        try {
+    const handleDeleteConversation =
+        async (
+            conversationIdToDelete: string,
+        ) => {
             const supabase = createClient();
 
-            const { data, error } = await supabase
-                .from("messages")
-                .select("id, role, content")
-                .eq(
-                    "conversation_id",
-                    selectedConversationId,
-                )
-                .order("created_at", { ascending: true });
+            const { error } =
+                await supabase
+                    .from("conversations")
+                    .delete()
+                    .eq(
+                        "id",
+                        conversationIdToDelete,
+                    );
 
             if (error) {
-                throw error;
+                console.error(
+                    "Error deleting conversation:",
+                    error,
+                );
+
+                window.alert(
+                    "Unable to delete the conversation. Please try again.",
+                );
+
+                return;
             }
 
-            setMessages(
-                (data ?? []).map((msg) => ({
-                    id: msg.id,
-                    role: msg.role,
-                    content: msg.content,
-                })),
+            setConversations(
+                (prevConversations) =>
+                    prevConversations.filter(
+                        (conversation) =>
+                            conversation.id !==
+                            conversationIdToDelete,
+                    ),
             );
 
-            shouldAutoScrollRef.current = true;
-        } catch (error) {
-            console.error(
-                "Error loading conversation:",
-                error,
+            if (
+                conversationId ===
+                conversationIdToDelete
+            ) {
+                setConversationId(null);
+
+                setMessages([
+                    {
+                        id: "new-chat",
+                        role: "assistant",
+                        content:
+                            "Hello! How can I assist you today?",
+                    },
+                ]);
+
+                setMessage("");
+                setSources([]);
+                shouldAutoScrollRef.current =
+                    true;
+            }
+        };
+
+    // Load a conversation
+    const handleSelectConversation =
+        async (
+            selectedConversationId: string,
+        ) => {
+            if (loading) {
+                return;
+            }
+
+            setConversationId(
+                selectedConversationId,
             );
 
-            setMessages([
-                {
-                    id: "error",
-                    role: "assistant",
-                    content:
-                        "Unable to load this conversation.",
-                },
-            ]);
-        } finally {
-            setLoading(false);
-        }
-    };
+            setLoading(true);
+            setSources([]);
 
-    const generateConversationTitle = (text: string) => {
-        const cleanedText = text
-            .replace(/\s+/g, " ")
-            .trim();
+            try {
+                const supabase =
+                    createClient();
 
-        if (cleanedText.length <= 40) {
-            return cleanedText;
-        }
+                const { data, error } =
+                    await supabase
+                        .from("messages")
+                        .select(
+                            "id, role, content",
+                        )
+                        .eq(
+                            "conversation_id",
+                            selectedConversationId,
+                        )
+                        .order(
+                            "created_at",
+                            {
+                                ascending: true,
+                            },
+                        );
 
-        return cleanedText.slice(0, 40).trimEnd() + "...";
-    };
+                if (error) {
+                    throw error;
+                }
+
+                setMessages(
+                    (data ?? []).map(
+                        (msg) => ({
+                            id: msg.id,
+                            role: msg.role,
+                            content:
+                                msg.content,
+                        }),
+                    ),
+                );
+
+                shouldAutoScrollRef.current =
+                    true;
+            } catch (error) {
+                console.error(
+                    "Error loading conversation:",
+                    error,
+                );
+
+                setMessages([
+                    {
+                        id: "error",
+                        role: "assistant",
+                        content:
+                            "Unable to load this conversation.",
+                    },
+                ]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+    const generateConversationTitle =
+        (text: string) => {
+            const cleanedText = text
+                .replace(/\s+/g, " ")
+                .trim();
+
+            if (cleanedText.length <= 40) {
+                return cleanedText;
+            }
+
+            return (
+                cleanedText
+                    .slice(0, 40)
+                    .trimEnd() + "..."
+            );
+        };
+
+    const handleSuggestionClick =
+        (text: string) => {
+            setMessage(text);
+        };
 
     const handleSendMessage = async () => {
         if (!message.trim() || loading) {
@@ -238,7 +304,8 @@ export default function ChatPage() {
 
         const userMessage = message;
 
-        const assistantMessageId = crypto.randomUUID();
+        const assistantMessageId =
+            crypto.randomUUID();
 
         shouldAutoScrollRef.current = true;
 
@@ -258,26 +325,89 @@ export default function ChatPage() {
 
         setLoading(true);
         setMessage("");
+        setSources([]);
 
         try {
-            const response = await fetch("/api/chat", {
-                method: "POST",
-
-                headers: {
-                    "Content-Type": "application/json",
+            const response = await fetch(
+                "/api/chat",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json",
+                    },
+                    body: JSON.stringify({
+                        message: userMessage,
+                        conversationId,
+                    }),
                 },
-
-                body: JSON.stringify({
-                    message: userMessage,
-                    conversationId,
-                }),
-            });
+            );
 
             if (!response.ok) {
+                let errorMessage =
+                    "Failed to fetch AI response.";
+
+                try {
+                    const errorData =
+                        await response.json();
+
+                    if (
+                        errorData?.error &&
+                        typeof errorData.error ===
+                            "string"
+                    ) {
+                        errorMessage =
+                            errorData.error;
+                    }
+                } catch {
+                    // Ignore JSON parsing errors.
+                }
+
                 throw new Error(
-                    "Failed to fetch AI response",
+                    errorMessage,
                 );
             }
+
+            /*
+             * Get source metadata from the
+             * response header.
+             */
+
+            const sourcesHeader =
+                response.headers.get(
+                    "X-Chat-Sources",
+                );
+
+            if (sourcesHeader) {
+                try {
+                    const parsedSources =
+                        JSON.parse(
+                            sourcesHeader,
+                        );
+
+                    if (
+                        Array.isArray(
+                            parsedSources,
+                        )
+                    ) {
+                        setSources(
+                            parsedSources,
+                        );
+                    }
+                } catch (error) {
+                    console.error(
+                        "Failed to parse chat sources:",
+                        error,
+                    );
+
+                    setSources([]);
+                }
+            }
+
+            /*
+             * Get the conversation ID returned
+             * by the API.
+             */
 
             const returnedConversationId =
                 response.headers.get(
@@ -290,19 +420,34 @@ export default function ChatPage() {
                 );
             }
 
-            if (!conversationId && returnedConversationId) {
-                const supabase = createClient();
+            /*
+             * If this is a new conversation,
+             * generate its title.
+             */
 
-                const title = generateConversationTitle(
-                    userMessage,
-                );
+            if (
+                !conversationId &&
+                returnedConversationId
+            ) {
+                const supabase =
+                    createClient();
 
-                const { error: titleError } = await supabase
+                const title =
+                    generateConversationTitle(
+                        userMessage,
+                    );
+
+                const {
+                    error: titleError,
+                } = await supabase
                     .from("conversations")
                     .update({
                         title,
                     })
-                    .eq("id", returnedConversationId);
+                    .eq(
+                        "id",
+                        returnedConversationId,
+                    );
 
                 if (titleError) {
                     console.error(
@@ -311,6 +456,10 @@ export default function ChatPage() {
                     );
                 }
             }
+
+            /*
+             * Read the streamed AI response.
+             */
 
             const reader =
                 response.body?.getReader();
@@ -321,36 +470,44 @@ export default function ChatPage() {
                 );
             }
 
-            const decoder = new TextDecoder();
+            const decoder =
+                new TextDecoder();
 
             let pendingContent = "";
 
-            let updateFrame: number | null = null;
+            let updateFrame:
+                | number
+                | null = null;
 
-            const flushPendingContent = () => {
-                updateFrame = null;
+            const flushPendingContent =
+                () => {
+                    updateFrame = null;
 
-                if (!pendingContent) {
-                    return;
-                }
+                    if (!pendingContent) {
+                        return;
+                    }
 
-                const content = pendingContent;
+                    const content =
+                        pendingContent;
 
-                pendingContent = "";
+                    pendingContent = "";
 
-                setMessages((prevMessages) =>
-                    prevMessages.map((msg) =>
-                        msg.id === assistantMessageId
-                            ? {
-                                ...msg,
-                                content:
-                                    msg.content +
-                                    content,
-                            }
-                            : msg,
-                    ),
-                );
-            };
+                    setMessages(
+                        (prevMessages) =>
+                            prevMessages.map(
+                                (msg) =>
+                                    msg.id ===
+                                    assistantMessageId
+                                        ? {
+                                              ...msg,
+                                              content:
+                                                  msg.content +
+                                                  content,
+                                          }
+                                        : msg,
+                            ),
+                    );
+                };
 
             while (true) {
                 const { done, value } =
@@ -360,12 +517,17 @@ export default function ChatPage() {
                     break;
                 }
 
-                pendingContent += decoder.decode(
-                    value,
-                    { stream: true },
-                );
+                pendingContent +=
+                    decoder.decode(
+                        value,
+                        {
+                            stream: true,
+                        },
+                    );
 
-                if (updateFrame === null) {
+                if (
+                    updateFrame === null
+                ) {
                     updateFrame =
                         requestAnimationFrame(
                             flushPendingContent,
@@ -373,37 +535,57 @@ export default function ChatPage() {
                 }
             }
 
-            pendingContent += decoder.decode();
+            pendingContent +=
+                decoder.decode();
 
-            if (updateFrame !== null) {
-                cancelAnimationFrame(updateFrame);
+            if (
+                updateFrame !== null
+            ) {
+                cancelAnimationFrame(
+                    updateFrame,
+                );
             }
 
             flushPendingContent();
 
-            // Refresh the conversation list
-            const supabase = createClient();
+            /*
+             * Refresh the conversation list.
+             */
 
-            const { data } = await supabase
-                .from("conversations")
-                .select("id, title, updated_at")
-                .order("updated_at", {
-                    ascending: false,
-                });
+            const supabase =
+                createClient();
+
+            const { data } =
+                await supabase
+                    .from("conversations")
+                    .select(
+                        "id, title, updated_at",
+                    )
+                    .order(
+                        "updated_at",
+                        {
+                            ascending: false,
+                        },
+                    );
 
             setConversations(data ?? []);
         } catch (error) {
             console.error(error);
 
-            setMessages((prevMessages) => [
-                ...prevMessages,
-                {
-                    id: crypto.randomUUID(),
-                    role: "assistant",
-                    content:
-                        "Something went wrong. Please try again.",
-                },
-            ]);
+            setMessages(
+                (prevMessages) =>
+                    prevMessages.map(
+                        (msg) =>
+                            msg.id ===
+                            assistantMessageId
+                                ? {
+                                      ...msg,
+                                      content:
+                                          "Something went wrong. Please try again.",
+                                  }
+                                : msg,
+                    ),
+            );
         } finally {
             setLoading(false);
         }
@@ -413,29 +595,80 @@ export default function ChatPage() {
         <div className="flex h-screen bg-slate-50">
             <Sidebar
                 conversations={conversations}
-                activeConversationId={conversationId}
+                activeConversationId={
+                    conversationId
+                }
                 onSelectConversation={
                     handleSelectConversation
                 }
-                onNewChat={handleNewChat}
-                onDeleteConversation={handleDeleteConversation}
+                onNewChat={
+                    handleNewChat
+                }
+                onDeleteConversation={
+                    handleDeleteConversation
+                }
+                isOpen={sidebarOpen}
+                onClose={() =>
+                    setSidebarOpen(false)
+                }
             />
 
-            <main className="flex min-h-0 flex-1 flex-col">
-                <ChatHeader />
+            <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <ChatHeader
+                    onToggleSidebar={() =>
+                        setSidebarOpen(
+                            (prev) =>
+                                !prev,
+                        )
+                    }
+                />
 
                 <ChatMessages
                     messages={messages}
                     messagesContainerRef={
                         messagesContainerRef
                     }
-                    onScroll={handleMessagesScroll}
+                    onScroll={
+                        handleMessagesScroll
+                    }
+                    loading={loading}
+                    onSuggestionClick={
+                        handleSuggestionClick
+                    }
                 />
+
+                {sources.length > 0 && (
+                    <div className="border-t border-slate-200 bg-white px-6 py-3">
+                        <p className="text-xs font-semibold text-slate-500">
+                            Sources
+                        </p>
+
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            {sources.map(
+                                (source) => (
+                                    <span
+                                        key={
+                                            source.documentId
+                                        }
+                                        className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
+                                    >
+                                        📄{" "}
+                                        {
+                                            source.fileName
+                                        }
+                                    </span>
+                                ),
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 <ChatInput
                     message={message}
                     setMessage={setMessage}
-                    onSend={handleSendMessage}
+                    onSend={
+                        handleSendMessage
+                    }
                     loading={loading}
                 />
             </main>
