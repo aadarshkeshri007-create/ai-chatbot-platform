@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const features = [
   {
@@ -69,31 +70,32 @@ const features = [
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
+    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-150">
       {/* ── Header ──────────────────────────────────────── */}
-      <header className="flex items-center justify-between px-6 py-4 sm:px-10">
+      <header className="flex items-center justify-between px-6 py-4 sm:px-10 border-b border-transparent dark:border-slate-850">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600 transition-colors group-hover:bg-teal-700"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600 transition-colors group-hover:bg-teal-700 shadow-sm"
             aria-hidden="true"
           >
             <span className="text-xs font-bold text-white">AI</span>
           </div>
-          <span className="text-sm font-semibold text-slate-900">
+          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             SupportAI
           </span>
         </Link>
 
-        <nav className="flex items-center gap-3" aria-label="Account">
+        <nav className="flex items-center gap-2.5 sm:gap-3" aria-label="Account and Settings">
+          <ThemeToggle />
           <Link
             href="/signup"
-            className="hidden rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 transition-colors duration-150 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 sm:inline-flex"
+            className="hidden rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 transition-colors duration-150 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 sm:inline-flex"
           >
             Sign up
           </Link>
           <Link
             href="/login"
-            className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all duration-150 hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+            className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all duration-150 hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-teal-600 dark:hover:bg-teal-950/40 dark:hover:text-teal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
           >
             Log in
           </Link>
@@ -105,21 +107,21 @@ export default function Home() {
         {/* Ambient glow */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-16 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-teal-500/[0.07] blur-[100px]"
+          className="pointer-events-none absolute left-1/2 top-16 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-teal-500/[0.07] blur-[100px] dark:bg-teal-500/[0.12]"
         />
 
         <div className="relative flex max-w-2xl flex-col items-center pt-24 pb-16 text-center sm:pt-32 sm:pb-20">
-          <div className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">
+          <div className="mb-6 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-teal-500" />
             AI-powered customer support
           </div>
 
-          <h1 className="text-3xl font-semibold leading-tight tracking-tight text-slate-900 sm:text-[2.75rem] sm:leading-[1.15]">
+          <h1 className="text-3xl font-semibold leading-tight tracking-tight text-slate-900 dark:text-slate-100 sm:text-[2.75rem] sm:leading-[1.15]">
             Customer support that
-            <span className="text-teal-600"> never sleeps</span>
+            <span className="text-teal-600 dark:text-teal-400"> never sleeps</span>
           </h1>
 
-          <p className="mt-4 max-w-lg text-base leading-relaxed text-slate-500 sm:text-lg">
+          <p className="mt-4 max-w-lg text-base leading-relaxed text-slate-500 dark:text-slate-400 sm:text-lg">
             Resolve customer questions instantly with an AI assistant trained on
             your knowledge base — no waiting, no queue.
           </p>
@@ -127,7 +129,7 @@ export default function Home() {
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:gap-4">
             <Link
               href="/chat"
-              className="group inline-flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-teal-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 active:scale-[0.98]"
+              className="group inline-flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-teal-700 hover:shadow-md dark:bg-teal-500 dark:hover:bg-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 active:scale-[0.98]"
             >
               Get started
               <svg
@@ -149,7 +151,7 @@ export default function Home() {
 
             <Link
               href="/login"
-              className="inline-flex items-center rounded-lg px-5 py-2.5 text-sm font-medium text-slate-600 transition-colors duration-150 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+              className="inline-flex items-center rounded-lg px-5 py-2.5 text-sm font-medium text-slate-600 transition-colors duration-150 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
             >
               Log in to your account
             </Link>
@@ -168,15 +170,15 @@ export default function Home() {
             {features.map((feature) => (
               <div
                 key={feature.title}
-                className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm transition-shadow duration-200 hover:shadow-md"
+                className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
               >
-                <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
+                <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 text-teal-600 dark:bg-teal-950/50 dark:text-teal-400">
                   {feature.icon}
                 </div>
-                <h3 className="text-sm font-semibold text-slate-900">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                   {feature.title}
                 </h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
                   {feature.description}
                 </p>
               </div>
@@ -186,9 +188,9 @@ export default function Home() {
       </main>
 
       {/* ── Footer ──────────────────────────────────────── */}
-      <footer className="border-t border-slate-200 bg-white px-6 py-5 sm:px-10">
+      <footer className="border-t border-slate-200 bg-white px-6 py-5 sm:px-10 dark:border-slate-800 dark:bg-slate-900 transition-colors duration-150">
         <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-slate-400 dark:text-slate-500">
             © {new Date().getFullYear()} SupportAI
           </span>
         </div>

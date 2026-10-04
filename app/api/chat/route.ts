@@ -7,571 +7,386 @@ export const runtime = "nodejs";
 
 const EMBEDDING_MODEL = "gemini-embedding-001";
 const EMBEDDING_DIMENSIONS = 768;
+const MATCH_COUNT = 3;
+const MATCH_THRESHOLD = 0.6;
 
-const MATCH_COUNT = 5;
-const MATCH_THRESHOLD = 0.60;
+const generateConversationTitle = (text: string) => {
+  const cleanedText = text.replace(/\s+/g, " ").trim();
 
-const generateConversationTitle = (
-    text: string,
-) => {
-    const cleanedText = text
-        .replace(/\s+/g, " ")
-        .trim();
+  if (cleanedText.length <= 40) {
+    return cleanedText || "New conversation";
+  }
 
-    if (cleanedText.length <= 40) {
-        return cleanedText || "New conversation";
-    }
-
-    return (
-        cleanedText.slice(0, 40).trimEnd() +
-        "..."
-    );
+  return cleanedText.slice(0, 40).trimEnd() + "...";
 };
 
 export async function POST(request: Request) {
-    try {
-        const supabase = await createClient();
+  try {
+    const supabase = await createClient();
 
-        /*
-         * ------------------------------------------------
-         * 1. Authenticate user
-         * ------------------------------------------------
-         */
+    /* 1. Authenticate user */
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-        const {
-            data: { user },
-            error: userError,
-        } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-        if (userError || !user) {
-            return NextResponse.json(
-                {
-                    error: "Unauthorized",
-                },
-                {
-                    status: 401,
-                },
-            );
-        }
+    /* 2. Read request */
+    const { message, conversationId } = await request.json();
 
-        /*
-         * ------------------------------------------------
-         * 2. Read request
-         * ------------------------------------------------
-         */
+    if (!message || typeof message !== "string") {
+      return NextResponse.json(
+        { error: "Message is required." },
+        { status: 400 },
+      );
+    }
 
-        const {
-            message,
-            conversationId,
-        } = await request.json();
+    const cleanMessage = message.trim();
 
-        if (
-            !message ||
-            typeof message !== "string"
-        ) {
-            return NextResponse.json(
-                {
-                    error:
-                        "Message is required.",
-                },
-                {
-                    status: 400,
-                },
-            );
-        }
+    if (!cleanMessage) {
+      return NextResponse.json(
+        { error: "Message is required." },
+        { status: 400 },
+      );
+    }
 
-        const cleanMessage =
-            message.trim();
+    /* 3. Get Gemini client */
+    const apiKey = process.env.GEMINI_API_KEY;
 
-        if (!cleanMessage) {
-            return NextResponse.json(
-                {
-                    error:
-                        "Message is required.",
-                },
-                {
-                    status: 400,
-                },
-            );
-        }
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY is not set");
+    }
 
-        /*
-         * ------------------------------------------------
-         * 3. Get Gemini client
-         * ------------------------------------------------
-         */
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: { timeout: 30_000 },
+    });
 
-        const apiKey =
-            process.env.GEMINI_API_KEY;
+    /* 4. Create or verify conversation */
+    let activeConversationId = conversationId as string | null;
 
-        if (!apiKey) {
-            throw new Error(
-                "GEMINI_API_KEY is not set",
-            );
-        }
+    if (!activeConversationId) {
+      const title = generateConversationTitle(cleanMessage);
+      const { data: newConversation, error: conversationError } = await supabase
+        .from("conversations")
+        .insert({ user_id: user.id, title })
+        .select("id, title, updated_at")
+        .single();
 
-        const ai = new GoogleGenAI({
-            apiKey,
-            httpOptions: {
-                timeout: 30_000,
-            },
-        });
+      if (conversationError) {
+        console.error("Conversation creation error:", conversationError);
+        throw new Error("Failed to create conversation.");
+      }
 
-        /*
-         * ------------------------------------------------
-         * 4. Create or verify conversation
-         * ------------------------------------------------
-         */
+      activeConversationId = newConversation.id;
+    } else {
+      const { data: conversation, error: conversationError } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("id", activeConversationId)
+        .eq("user_id", user.id)
+        .single();
 
-        let activeConversationId =
-            conversationId as
-                | string
-                | null;
-
-        if (!activeConversationId) {
-            const title =
-                generateConversationTitle(
-                    cleanMessage,
-                );
-
-            const {
-                data: newConversation,
-                error: conversationError,
-            } = await supabase
-                .from("conversations")
-                .insert({
-                    user_id: user.id,
-                    title,
-                })
-                .select(
-                    "id, title, updated_at",
-                )
-                .single();
-
-            if (conversationError) {
-                console.error(
-                    "Conversation creation error:",
-                    conversationError,
-                );
-
-                throw new Error(
-                    "Failed to create conversation.",
-                );
-            }
-
-            activeConversationId =
-                newConversation.id;
-        } else {
-            /*
-             * Make sure the conversation belongs
-             * to the authenticated user.
-             */
-
-            const {
-                data: conversation,
-                error: conversationError,
-            } = await supabase
-                .from("conversations")
-                .select("id")
-                .eq(
-                    "id",
-                    activeConversationId,
-                )
-                .eq(
-                    "user_id",
-                    user.id,
-                )
-                .single();
-
-            if (
-                conversationError ||
-                !conversation
-            ) {
-                return NextResponse.json(
-                    {
-                        error:
-                            "Conversation not found.",
-                    },
-                    {
-                        status: 404,
-                    },
-                );
-            }
-        }
-
-        /*
-         * ------------------------------------------------
-         * 5. Save user message
-         * ------------------------------------------------
-         */
-
-        const {
-            error: userMessageError,
-        } = await supabase
-            .from("messages")
-            .insert({
-                conversation_id:
-                    activeConversationId,
-                role: "user",
-                content: cleanMessage,
-            });
-
-        if (userMessageError) {
-            console.error(
-                "User message save error:",
-                userMessageError,
-            );
-
-            throw new Error(
-                "Failed to save user message.",
-            );
-        }
-
-        /*
-         * ------------------------------------------------
-         * 6. Generate query embedding
-         * ------------------------------------------------
-         */
-
-        const embeddingResponse =
-            await ai.models.embedContent({
-                model: EMBEDDING_MODEL,
-                contents: cleanMessage,
-                config: {
-                    taskType:
-                        "RETRIEVAL_QUERY",
-                    outputDimensionality:
-                        EMBEDDING_DIMENSIONS,
-                },
-            });
-
-        const queryEmbedding =
-            embeddingResponse.embeddings?.[0]
-                ?.values;
-
-        if (
-            !queryEmbedding ||
-            queryEmbedding.length !==
-                EMBEDDING_DIMENSIONS
-        ) {
-            throw new Error(
-                "Failed to generate query embedding.",
-            );
-        }
-
-        /*
-         * ------------------------------------------------
-         * 7. Search knowledge base
-         * ------------------------------------------------
-         */
-
-        const {
-            data: chunks,
-            error: searchError,
-        } = await supabase.rpc(
-            "match_document_chunks",
-            {
-                query_embedding:
-                    queryEmbedding,
-                match_count:
-                    MATCH_COUNT,
-                filter_user_id:
-                    user.id,
-                match_threshold:
-                    MATCH_THRESHOLD,
-            },
+      if (conversationError || !conversation) {
+        return NextResponse.json(
+          { error: "Conversation not found." },
+          { status: 404 },
         );
+      }
+    }
 
-        if (searchError) {
-            console.error(
-                "Vector search error:",
-                searchError,
-            );
+    /* 5. Save user message */
+    const { error: userMessageError } = await supabase.from("messages").insert({
+      conversation_id: activeConversationId,
+      role: "user",
+      content: cleanMessage,
+    });
 
-            throw new Error(
-                "Failed to search knowledge base.",
-            );
-        }
+    if (userMessageError) {
+      console.error("User message save error:", userMessageError);
+      throw new Error("Failed to save user message.");
+    }
 
-        const relevantChunks =
-            chunks ?? [];
+    /* 6. Fetch recent history and generate the retrieval query */
+    const { data: conversationMessages, error: historyError } = await supabase
+      .from("messages")
+      .select("role, content")
+      .eq("conversation_id", activeConversationId)
+      .order("created_at", { ascending: false })
+      .limit(6);
 
-        /*
-         * ------------------------------------------------
-         * 8. Build RAG context
-         * ------------------------------------------------
-         */
+    if (historyError) {
+      console.error("Conversation history error:", historyError);
+    }
 
-        const context =
-            relevantChunks.length > 0
-                ? relevantChunks
-                      .map(
-                          (
-                              chunk: {
-                                  file_name: string;
-                                  content: string;
-                              },
-                              index: number,
-                          ) =>
-                              `Source ${
-                                  index + 1
-                              }: ${
-                                  chunk.file_name
-                              }\n${
-                                  chunk.content
-                              }`,
-                      )
-                      .join("\n\n")
-                : "";
+    console.log("CONVERSATION HISTORY:", conversationMessages);
 
-        /*
-         * ------------------------------------------------
-         * 9. Build unique source list
-         * ------------------------------------------------
-         */
+    // The user message was saved immediately before this query. Results are newest
+    // first, so remove the latest fetched row by position—not by matching text.
+    // This remains correct even if an earlier message has identical content.
+    const priorConversationMessages = (conversationMessages ?? []).slice(1);
+    const historyText = priorConversationMessages
+      .reverse()
+      .map((msg) => `${msg.role}: ${msg.content}`)
+      .join("\n");
 
-        const sources = Array.from(
-            new Map(
-                relevantChunks.map(
-                    (chunk: {
-                        document_id: string;
-                        file_name: string;
-                    }) => [
-                        chunk.document_id,
-                        {
-                            documentId:
-                                chunk.document_id,
-                            fileName:
-                                chunk.file_name,
-                        },
-                    ],
-                ),
-            ).values(),
-        );
+    const rewriteResponse = await ai.models.generateContent({
+      model: "gemini-3.5-flash-lite",
+      contents: `
+Conversation history:
+${historyText || "No previous conversation."}
 
-        console.log(
-            "RAG SOURCES:",
-            sources,
-        );
+Current user question:
+${cleanMessage}
 
-        /*
-         * ------------------------------------------------
-         * 10. Build system instruction
-         * ------------------------------------------------
-         */
+Rewrite the current user question into a standalone search query that can be understood without the conversation history.
 
-        const systemInstruction = `
+Rules:
+- Resolve pronouns and references using the conversation.
+- Preserve the user's intended meaning.
+- Do not answer the question.
+- Return ONLY the rewritten search query.
+- If the current question is already self-contained, return it unchanged.
+`,
+    });
+
+    // searchQuery is only for vector and keyword retrieval. Gemini answers the
+    // original cleanMessage, with prior turns supplied in its system instruction.
+    const searchQuery = rewriteResponse.text?.trim() || cleanMessage;
+
+    console.log("ORIGINAL QUERY:", cleanMessage);
+    console.log("SEARCH QUERY:", searchQuery);
+
+    const embeddingResponse = await ai.models.embedContent({
+      model: EMBEDDING_MODEL,
+      contents: searchQuery,
+      config: {
+        taskType: "RETRIEVAL_QUERY",
+        outputDimensionality: EMBEDDING_DIMENSIONS,
+      },
+    });
+
+    const queryEmbedding = embeddingResponse.embeddings?.[0]?.values;
+
+    if (!queryEmbedding || queryEmbedding.length !== EMBEDDING_DIMENSIONS) {
+      throw new Error("Failed to generate query embedding.");
+    }
+
+    /* 7. Search knowledge base */
+    const keywordQuery = searchQuery.replace(/[^\w\s]/g, " ").trim();
+
+    const { data: chunks, error: searchError } = await supabase.rpc(
+      "match_document_chunks",
+      {
+        query_embedding: queryEmbedding,
+        match_count: MATCH_COUNT,
+        filter_user_id: user.id,
+        match_threshold: MATCH_THRESHOLD,
+      },
+    );
+
+    if (searchError) {
+      console.error("Vector search error:", searchError);
+    }
+
+    const { data: keywordChunks, error: keywordSearchError } =
+      await supabase.rpc("keyword_search_document_chunks", {
+        search_query: keywordQuery,
+        match_count: MATCH_COUNT,
+        filter_user_id: user.id,
+      });
+
+    if (keywordSearchError) {
+      console.error("Keyword search error:", keywordSearchError);
+    }
+
+    console.log("VECTOR RESULTS:", chunks);
+    console.log("KEYWORD RESULTS:", keywordChunks);
+
+    type RetrievedChunk = {
+      id: string;
+      document_id: string;
+      file_name: string;
+      content: string;
+      chunk_index: number;
+    };
+    type VectorChunk = RetrievedChunk & { similarity: number };
+    type KeywordChunk = RetrievedChunk & { rank: number };
+
+    const vectorResults: VectorChunk[] = chunks ?? [];
+    const keywordResults: KeywordChunk[] = keywordChunks ?? [];
+    const RRF_K = 60;
+    const hybridScores = new Map<
+      string,
+      { chunk: RetrievedChunk; score: number }
+    >();
+
+    vectorResults.forEach((chunk, index) => {
+      const existing = hybridScores.get(chunk.id);
+      const score = 1 / (RRF_K + index + 1);
+      if (existing) existing.score += score;
+      else hybridScores.set(chunk.id, { chunk, score });
+    });
+
+    keywordResults.forEach((chunk, index) => {
+      const existing = hybridScores.get(chunk.id);
+      const score = 1 / (RRF_K + index + 1);
+      if (existing) existing.score += score;
+      else hybridScores.set(chunk.id, { chunk, score });
+    });
+
+    const hybridResults = Array.from(hybridScores.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, MATCH_COUNT)
+      .map((item) => item.chunk);
+
+    console.log(
+      "HYBRID SCORES:",
+      Array.from(hybridScores.values())
+        .sort((a, b) => b.score - a.score)
+        .map((item) => ({
+          file: item.chunk.file_name,
+          chunkIndex: item.chunk.chunk_index,
+          score: item.score,
+        })),
+    );
+
+    if (searchError) {
+      console.error("Vector search error:", searchError);
+      throw new Error("Failed to search knowledge base.");
+    }
+
+    const relevantChunks = hybridResults;
+    const context =
+      relevantChunks.length > 0
+        ? relevantChunks
+            .map(
+              (chunk, index) =>
+                `Source ${index + 1}: ${chunk.file_name}\n${chunk.content}`,
+            )
+            .join("\n\n")
+        : "";
+
+    console.log("RAG CONTEXT:", context);
+
+    /* 9. Build unique source list */
+    const sources = Array.from(
+      new Map(
+        relevantChunks.map((chunk) => [
+          chunk.document_id,
+          { documentId: chunk.document_id, fileName: chunk.file_name },
+        ]),
+      ).values(),
+    );
+
+    console.log(
+      "RAG RETRIEVAL:",
+      relevantChunks.map((chunk) => ({
+        file: chunk.file_name,
+        chunkIndex: chunk.chunk_index,
+      })),
+    );
+
+    /* 10. Build system instruction */
+    const systemInstruction = `
 You are an AI customer support assistant.
 
-You have access to a knowledge base containing
-documents uploaded by the user.
+You have access to a knowledge base containing documents uploaded by the user.
 
-Use the knowledge base only when it is relevant
-to the user's question.
+Use the knowledge base only when it is relevant to the user's question.
 
 IMPORTANT RULES:
 
-1. Do not force knowledge base information into
-   unrelated questions.
-
+1. Do not force knowledge base information into unrelated questions.
 2. Do not invent business-specific information.
-
-3. If a business-specific question cannot be
-   answered from the knowledge base, clearly say
-   that you don't have enough information.
-
-4. You may use general knowledge for normal
-   general-purpose questions.
-
+3. If a business-specific question cannot be answered from the knowledge base, clearly say that you don't have enough information.
+4. You may use general knowledge for normal general-purpose questions.
 5. Keep answers concise and natural.
+
+Recent Conversation:
+
+${historyText || "No previous conversation."}
+
+Use the recent conversation to resolve references such as "they", "it", "that", "this", "what about...", and "can I do that?". When answering a follow-up question, preserve the topic established by the conversation. The current user question is provided separately.
 
 Knowledge Base Context:
 
-${
-    context ||
-    "No sufficiently relevant knowledge base information was found."
-}
+${context || "No sufficiently relevant knowledge base information was found."}
 `;
 
-        /*
-         * ------------------------------------------------
-         * 11. Generate streaming response
-         * ------------------------------------------------
-         */
+    /* 11. Generate streaming response */
+    const result = await ai.models.generateContentStream({
+      model: "gemini-3.5-flash-lite",
+      contents: cleanMessage,
+      config: { systemInstruction },
+    });
 
-        const result =
-            await ai.models.generateContentStream({
-                model: "gemini-3.5-flash-lite",
-                contents: cleanMessage,
-                config: {
-                    systemInstruction,
-                },
-            });
+    /* 12. Stream response and save assistant message */
+    const encoder = new TextEncoder();
+    let fullAssistantResponse = "";
 
-        /*
-         * ------------------------------------------------
-         * 12. Stream response and save assistant message
-         * ------------------------------------------------
-         */
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of result) {
+            const text = chunk.text ?? "";
+            if (text) {
+              fullAssistantResponse += text;
+              controller.enqueue(encoder.encode(text));
+            }
+          }
 
-        const encoder =
-            new TextEncoder();
+          if (activeConversationId) {
+            const { error: assistantMessageError } = await supabase
+              .from("messages")
+              .insert({
+                conversation_id: activeConversationId,
+                role: "assistant",
+                content: fullAssistantResponse,
+              });
 
-        let fullAssistantResponse = "";
+            if (assistantMessageError) {
+              console.error(
+                "Assistant message save error:",
+                assistantMessageError,
+              );
+            }
 
-        const stream =
-            new ReadableStream({
-                async start(controller) {
-                    try {
-                        for await (
-                            const chunk of result
-                        ) {
-                            const text =
-                                chunk.text ??
-                                "";
+            const { error: updateError } = await supabase
+              .from("conversations")
+              .update({ updated_at: new Date().toISOString() })
+              .eq("id", activeConversationId)
+              .eq("user_id", user.id);
 
-                            if (text) {
-                                fullAssistantResponse +=
-                                    text;
+            if (updateError) {
+              console.error("Conversation update error:", updateError);
+            }
+          }
 
-                                controller.enqueue(
-                                    encoder.encode(
-                                        text,
-                                    ),
-                                );
-                            }
-                        }
+          controller.close();
+        } catch (error) {
+          console.error("Error reading result stream:", error);
+          controller.error(error);
+        }
+      },
+    });
 
-                        /*
-                         * Save the complete assistant
-                         * response after streaming finishes.
-                         */
+    /* 13. Build response headers */
+    const headers = new Headers();
+    headers.set("Content-Type", "text/plain; charset=utf-8");
+    headers.set("X-Conversation-Id", activeConversationId!);
+    headers.set("X-Chat-Sources", JSON.stringify(sources));
 
-                        if (
-                            activeConversationId
-                        ) {
-                            const {
-                                error:
-                                    assistantMessageError,
-                            } =
-                                await supabase
-                                    .from(
-                                        "messages",
-                                    )
-                                    .insert({
-                                        conversation_id:
-                                            activeConversationId,
-                                        role: "assistant",
-                                        content:
-                                            fullAssistantResponse,
-                                    });
-
-                            if (
-                                assistantMessageError
-                            ) {
-                                console.error(
-                                    "Assistant message save error:",
-                                    assistantMessageError,
-                                );
-                            }
-
-                            /*
-                             * Update conversation timestamp.
-                             */
-
-                            const {
-                                error:
-                                    updateError,
-                            } =
-                                await supabase
-                                    .from(
-                                        "conversations",
-                                    )
-                                    .update({
-                                        updated_at:
-                                            new Date().toISOString(),
-                                    })
-                                    .eq(
-                                        "id",
-                                        activeConversationId,
-                                    )
-                                    .eq(
-                                        "user_id",
-                                        user.id,
-                                    );
-
-                            if (updateError) {
-                                console.error(
-                                    "Conversation update error:",
-                                    updateError,
-                                );
-                            }
-                        }
-
-                        controller.close();
-                    } catch (error) {
-                        console.error(
-                            "Error reading result stream:",
-                            error,
-                        );
-
-                        controller.error(
-                            error,
-                        );
-                    }
-                },
-            });
-
-        /*
-         * ------------------------------------------------
-         * 13. Build response headers
-         * ------------------------------------------------
-         */
-
-        const headers =
-            new Headers();
-
-        headers.set(
-            "Content-Type",
-            "text/plain; charset=utf-8",
-        );
-
-        headers.set(
-            "X-Conversation-Id",
-            activeConversationId!,
-        );
-
-        headers.set(
-            "X-Chat-Sources",
-            JSON.stringify(sources),
-        );
-
-        /*
-         * ------------------------------------------------
-         * 14. Return streaming response
-         * ------------------------------------------------
-         */
-
-        return new Response(stream, {
-            status: 200,
-            headers,
-        });
-    } catch (error) {
-        console.error(
-            "Error generating content:",
-            error,
-        );
-
-        return NextResponse.json(
-            {
-                error:
-                    error instanceof Error
-                        ? error.message
-                        : "Unknown error",
-            },
-            {
-                status: 500,
-            },
-        );
-    }
+    /* 14. Return streaming response */
+    return new Response(stream, { status: 200, headers });
+  } catch (error) {
+    console.error("Error generating content:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 },
+    );
+  }
 }

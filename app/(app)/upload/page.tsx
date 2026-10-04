@@ -275,31 +275,31 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50 px-6 py-10">
+    <div className="flex-1 overflow-y-auto bg-slate-50 px-6 py-10 dark:bg-slate-950 transition-colors duration-150">
       <div className="mx-auto max-w-5xl">
-        <header className="mb-8">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+        <header className="mb-6">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             Knowledge Base
           </h1>
 
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Upload documents that your AI
             assistant can use to answer
             customer questions.
           </p>
         </header>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-          <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 px-6 py-12 text-center">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-teal-50 text-2xl">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 px-6 py-10 text-center dark:border-slate-700/70 dark:bg-slate-900/40">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-teal-50 text-2xl dark:bg-teal-950/40">
               📄
             </div>
 
-            <h2 className="text-base font-semibold text-slate-900">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
               Upload your documents
             </h2>
 
-            <p className="mt-2 max-w-md text-sm text-slate-500">
+            <p className="mt-2 max-w-md text-sm text-slate-500 dark:text-slate-400">
               Upload PDF, DOCX, TXT, or
               Markdown files up to 20 MB
               each.
@@ -320,7 +320,7 @@ export default function UploadPage() {
                 fileInputRef.current?.click()
               }
               disabled={uploading}
-              className="mt-6 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-6 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-teal-500 dark:hover:bg-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
             >
               {uploading
                 ? "Uploading..."
@@ -329,54 +329,54 @@ export default function UploadPage() {
           </div>
 
           {error && (
-            <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+            <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300 dark:border dark:border-red-900/50">
               {error}
             </p>
           )}
 
           {success && (
-            <p className="mt-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            <p className="mt-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border dark:border-emerald-900/50">
               {success}
             </p>
           )}
 
           {processResult && (
-            <p className="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
+            <p className="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:border dark:border-blue-900/50">
               {processResult}
             </p>
           )}
         </section>
 
-        <section className="mt-8">
-          <h2 className="mb-4 text-sm font-semibold text-slate-900">
+        <section className="mt-6 mb-10">
+          <h2 className="mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">
             Your documents
           </h2>
 
           {documents.length === 0 ? (
-            <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500">
+            <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
               No documents uploaded yet.
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
               {documents.map(
                 (document) => (
                   <div
                     key={document.id}
-                    className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4 last:border-b-0"
+                    className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4 last:border-b-0 dark:border-slate-800"
                   >
                     <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm dark:bg-slate-800">
                         📄
                       </div>
 
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-slate-900">
+                        <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
                           {
                             document.file_name
                           }
                         </p>
 
-                        <p className="mt-0.5 text-xs text-slate-500">
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                           {formatFileSize(
                             document.file_size,
                           )}
@@ -385,7 +385,7 @@ export default function UploadPage() {
                     </div>
 
                     <div className="flex shrink-0 items-center gap-3">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:border dark:border-slate-700/60">
                         {
                           document.status
                         }
@@ -402,7 +402,7 @@ export default function UploadPage() {
                           processingId ===
                           document.id
                         }
-                        className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border dark:border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                       >
                         {processingId ===
                         document.id

@@ -12,7 +12,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
       {/* Assistant avatar */}
       {!isUser && (
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-600 mt-0.5">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-600 dark:bg-teal-500 mt-0.5 shadow-sm">
           <svg
             width="14"
             height="14"
@@ -34,7 +34,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         className={
           isUser
             ? "max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-teal-600 px-4 py-2.5 text-[14px] leading-relaxed text-white shadow-sm sm:max-w-lg"
-            : "max-w-[80%] min-w-0 whitespace-pre-wrap rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-2.5 text-[14px] leading-relaxed text-slate-800 shadow-sm sm:max-w-2xl"
+            : "max-w-[80%] min-w-0 whitespace-pre-wrap rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-2.5 text-[14px] leading-relaxed text-slate-800 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 sm:max-w-2xl"
         }
       >
         <MessageContent content={message.content} isUser={isUser} />
@@ -42,7 +42,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
       {/* User avatar */}
       {isUser && (
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-700 mt-0.5">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-700 dark:bg-slate-600 mt-0.5 shadow-sm">
           <svg
             width="14"
             height="14"

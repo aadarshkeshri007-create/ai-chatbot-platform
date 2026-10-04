@@ -3,7 +3,7 @@ export default function TypingIndicator() {
     <div className="flex justify-start">
       <div className="flex items-center gap-3 px-1">
         {/* Avatar */}
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-600">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-600 dark:bg-teal-500 shadow-sm">
           <svg
             width="14"
             height="14"
@@ -20,25 +20,25 @@ export default function TypingIndicator() {
           </svg>
         </div>
 
-        {/* Dots */}
+        {/* Dots bubble */}
         <div
-          className="flex items-center gap-1 rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-3 shadow-sm"
+          className="flex items-center gap-1 rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900"
           role="status"
           aria-label="AI is thinking"
         >
           <span
-            className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400"
+            className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400 dark:bg-slate-500"
             style={{ animation: "pulseDot 1.4s ease-in-out infinite" }}
           />
           <span
-            className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400"
+            className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400 dark:bg-slate-500"
             style={{
               animation: "pulseDot 1.4s ease-in-out infinite",
               animationDelay: "0.2s",
             }}
           />
           <span
-            className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400"
+            className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400 dark:bg-slate-500"
             style={{
               animation: "pulseDot 1.4s ease-in-out infinite",
               animationDelay: "0.4s",

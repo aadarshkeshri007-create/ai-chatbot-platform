@@ -5,6 +5,7 @@ import {
     useContext,
     useState,
     useCallback,
+    useEffect,
 } from "react";
 
 type Conversation = {
@@ -14,11 +15,15 @@ type Conversation = {
 };
 
 type SidebarContextValue = {
-    /* ── Sidebar visibility ─────────────────── */
+    /* ── Mobile Sidebar Drawer (open/close) ──── */
     sidebarOpen: boolean;
     openSidebar: () => void;
     closeSidebar: () => void;
     toggleSidebar: () => void;
+
+    /* ── Desktop Collapsible Rail (collapse/expand) ── */
+    collapsed: boolean;
+    toggleCollapsed: () => void;
 
     /* ── Chat-specific state ────────────────── */
     conversations: Conversation[];
@@ -44,12 +49,17 @@ type SidebarContextValue = {
 const noop = () => {};
 const noopWithId = (_id: string) => {};
 
+const COLLAPSED_STORAGE_KEY = "supportai-sidebar-collapsed";
+
 const SidebarContext =
     createContext<SidebarContextValue>({
         sidebarOpen: false,
         openSidebar: noop,
         closeSidebar: noop,
         toggleSidebar: noop,
+
+        collapsed: false,
+        toggleCollapsed: noop,
 
         conversations: [],
         setConversations: noop,
@@ -70,6 +80,21 @@ export function SidebarProvider({
 }) {
     const [sidebarOpen, setSidebarOpen] =
         useState(false);
+
+    const [collapsed, setCollapsed] =
+        useState(false);
+
+    /* Restore collapsed preference from localStorage */
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem(COLLAPSED_STORAGE_KEY);
+            if (stored === "true") {
+                setCollapsed(true);
+            }
+        } catch {
+            // localStorage not available
+        }
+    }, []);
 
     const [conversations, setConversations] =
         useState<Conversation[]>([]);
@@ -112,6 +137,18 @@ export function SidebarProvider({
         [],
     );
 
+    const toggleCollapsed = useCallback(() => {
+        setCollapsed((prev) => {
+            const next = !prev;
+            try {
+                localStorage.setItem(COLLAPSED_STORAGE_KEY, String(next));
+            } catch {
+                // Ignore
+            }
+            return next;
+        });
+    }, []);
+
     return (
         <SidebarContext.Provider
             value={{
@@ -119,6 +156,9 @@ export function SidebarProvider({
                 openSidebar,
                 closeSidebar,
                 toggleSidebar,
+
+                collapsed,
+                toggleCollapsed,
 
                 conversations,
                 setConversations,

@@ -17,7 +17,7 @@ export default function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium bg-teal-600 text-white shadow-sm transition-all duration-150 hover:bg-teal-700 hover:shadow-md active:bg-teal-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed disabled:shadow-none disabled:active:scale-100 ${className || ""}`}
+      className={`inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium bg-teal-600 text-white shadow-sm transition-all duration-150 hover:bg-teal-700 hover:shadow-md active:bg-teal-800 active:scale-[0.98] dark:bg-teal-500 dark:hover:bg-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed disabled:shadow-none disabled:active:scale-100 dark:disabled:bg-slate-800 dark:disabled:text-slate-600 ${className || ""}`}
       type={type}
       disabled={disabled}
       onClick={onClick}

@@ -636,8 +636,8 @@ export default function ChatPage() {
             />
 
             {sources.length > 0 && (
-                <div className="border-t border-slate-200 bg-white px-6 py-3">
-                    <p className="text-xs font-semibold text-slate-500">
+                <div className="border-t border-slate-200 bg-white px-6 py-3 dark:border-slate-800 dark:bg-slate-900 transition-colors duration-150">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                         Sources
                     </p>
 
@@ -648,7 +648,7 @@ export default function ChatPage() {
                                     key={
                                         source.documentId
                                     }
-                                    className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
+                                    className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:border dark:border-slate-700/50"
                                 >
                                     📄{" "}
                                     {

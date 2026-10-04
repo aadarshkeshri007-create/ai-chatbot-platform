@@ -38,7 +38,7 @@ export default function ChatInput({
   const canSend = message.trim().length > 0 && !loading;
 
   return (
-    <footer className="border-t border-slate-200 bg-white px-3 py-3 sm:px-5 sm:py-4">
+    <footer className="border-t border-slate-200 bg-white px-3 py-3 sm:px-5 sm:py-4 dark:border-slate-800 dark:bg-slate-900 transition-colors duration-150">
       <div className="mx-auto flex max-w-3xl items-end gap-2">
         <div className="relative flex-1">
           <textarea
@@ -50,7 +50,7 @@ export default function ChatInput({
             onKeyDown={handleKeyDown}
             disabled={loading}
             rows={1}
-            className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm transition-all duration-150 focus:border-teal-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/15 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+            className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm transition-all duration-150 focus:border-teal-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/15 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed dark:border-slate-700/80 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400 dark:focus:bg-slate-900 dark:disabled:bg-slate-800/50 dark:disabled:text-slate-600"
             aria-label="Chat message"
           />
         </div>
@@ -60,7 +60,7 @@ export default function ChatInput({
           type="button"
           onClick={onSend}
           disabled={!canSend}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white shadow-sm transition-all duration-150 hover:bg-teal-700 hover:shadow-md active:scale-[0.95] disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white shadow-sm transition-all duration-150 hover:bg-teal-700 hover:shadow-md active:scale-[0.95] disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:active:scale-100 dark:bg-teal-500 dark:hover:bg-teal-600 dark:disabled:bg-slate-800 dark:disabled:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
           aria-label={loading ? "Sending message" : "Send message"}
         >
           {loading ? (

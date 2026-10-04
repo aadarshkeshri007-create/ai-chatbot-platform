@@ -1,9 +1,9 @@
 export default function HistoryPage() {
     return (
-        <div className="flex flex-1 flex-col items-center justify-center bg-slate-50 px-6">
+        <div className="min-h-0 flex flex-1 flex-col items-center justify-center bg-slate-50 px-6 dark:bg-slate-950 transition-colors duration-150">
             <div className="flex max-w-md flex-col items-center text-center">
                 {/* Icon */}
-                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-teal-50">
+                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-teal-50 dark:bg-teal-950/40">
                     <svg
                         width="24"
                         height="24"
@@ -13,7 +13,7 @@ export default function HistoryPage() {
                         strokeWidth="1.5"
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        className="text-teal-600"
+                        className="text-teal-600 dark:text-teal-400"
                         aria-hidden="true"
                     >
                         <circle cx="12" cy="12" r="10" />
@@ -21,15 +21,15 @@ export default function HistoryPage() {
                     </svg>
                 </div>
 
-                <h1 className="text-lg font-semibold text-slate-900">
+                <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                     Chat History
                 </h1>
 
-                <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                <p className="mt-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
                     View and search through your past conversations. This feature is coming soon.
                 </p>
 
-                <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-500 shadow-sm">
+                <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
                     <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400" />
                     Coming soon
                 </div>

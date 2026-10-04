@@ -13,6 +13,8 @@ export default function AppShell({
         sidebarOpen,
         closeSidebar,
         toggleSidebar,
+        collapsed,
+        toggleCollapsed,
         conversations,
         activeConversationId,
         onSelectConversation,
@@ -21,7 +23,7 @@ export default function AppShell({
     } = useSidebarContext();
 
     return (
-        <div className="flex h-screen bg-slate-50">
+        <div className="flex h-screen bg-slate-50 dark:bg-slate-950">
             <Sidebar
                 conversations={conversations}
                 activeConversationId={
@@ -36,9 +38,11 @@ export default function AppShell({
                 }
                 isOpen={sidebarOpen}
                 onClose={closeSidebar}
+                collapsed={collapsed}
+                onToggleCollapsed={toggleCollapsed}
             />
 
-            <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <main className="flex min-h-0 min-w-0 flex-1 flex-col transition-all duration-300">
                 <ChatHeader
                     onToggleSidebar={
                         toggleSidebar

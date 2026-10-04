@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function SignupPage() {
     const [name, setName] = useState("");
@@ -63,20 +64,25 @@ export default function SignupPage() {
     };
 
     const inputStyles =
-        "w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-150";
+        "w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-150 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400";
 
     return (
-        <div className="min-h-screen flex justify-center items-center flex-col gap-6 bg-slate-50 px-4 relative overflow-hidden">
-            {/* Ambient background */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-                <div className="absolute -top-32 -left-32 w-[28rem] h-[28rem] bg-teal-500/[0.04] rounded-full blur-[100px]" />
-                <div className="absolute -bottom-32 -right-32 w-[28rem] h-[28rem] bg-teal-500/[0.03] rounded-full blur-[100px]" />
+        <div className="min-h-screen flex justify-center items-center flex-col gap-6 bg-slate-50 px-4 relative overflow-hidden dark:bg-slate-950 transition-colors duration-150">
+            {/* Top right theme toggle */}
+            <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20">
+                <ThemeToggle />
             </div>
 
-            <div className="w-full max-w-[400px] p-7 sm:p-8 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-6 bg-white animate-fade-in-up relative z-10">
+            {/* Ambient background */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+                <div className="absolute -top-32 -left-32 w-[28rem] h-[28rem] bg-teal-500/[0.04] rounded-full blur-[100px] dark:bg-teal-500/[0.08]" />
+                <div className="absolute -bottom-32 -right-32 w-[28rem] h-[28rem] bg-teal-500/[0.03] rounded-full blur-[100px] dark:bg-teal-500/[0.06]" />
+            </div>
+
+            <div className="w-full max-w-[400px] p-7 sm:p-8 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-6 bg-white animate-fade-in-up relative z-10 dark:border-slate-800 dark:bg-slate-900">
                 {/* Header */}
                 <header className="flex flex-col gap-2.5 items-center text-center">
-                    <div className="w-10 h-10 rounded-lg bg-teal-600 flex items-center justify-center mb-1">
+                    <div className="w-10 h-10 rounded-lg bg-teal-600 flex items-center justify-center mb-1 shadow-sm">
                         <svg
                             width="20"
                             height="20"
@@ -94,10 +100,10 @@ export default function SignupPage() {
                             <line x1="22" y1="11" x2="16" y2="11" />
                         </svg>
                     </div>
-                    <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+                    <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
                         Create your account
                     </h1>
-                    <p className="text-sm text-slate-500 leading-relaxed max-w-[280px]">
+                    <p className="text-sm text-slate-500 leading-relaxed max-w-[280px] dark:text-slate-400">
                         Get started with AI-powered customer support in minutes.
                     </p>
                 </header>
@@ -105,20 +111,20 @@ export default function SignupPage() {
                 {/* Success state */}
                 {success ? (
                     <div className="flex flex-col items-center gap-4 py-4">
-                        <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center ring-4 ring-emerald-100">
+                        <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center ring-4 ring-emerald-100 dark:ring-emerald-900/30">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                 <path d="M20 6L9 17l-5-5" />
                             </svg>
                         </div>
                         <div className="text-center">
-                            <h2 className="text-base font-semibold text-slate-900">Check your email</h2>
-                            <p className="mt-2 text-sm text-slate-500 leading-relaxed max-w-[300px]">
-                                We&apos;ve sent a confirmation link to <span className="font-medium text-slate-900">{email}</span>. Click it to activate your account.
+                            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Check your email</h2>
+                            <p className="mt-2 text-sm text-slate-500 leading-relaxed max-w-[300px] dark:text-slate-400">
+                                We&apos;ve sent a confirmation link to <span className="font-medium text-slate-900 dark:text-slate-100">{email}</span>. Click it to activate your account.
                             </p>
                         </div>
                         <Link
                             href="/login"
-                            className="mt-2 text-sm font-semibold text-teal-600 hover:text-teal-700 transition-colors"
+                            className="mt-2 text-sm font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors"
                         >
                             Go to login →
                         </Link>
@@ -130,7 +136,7 @@ export default function SignupPage() {
                             <div className="flex flex-col gap-4">
                                 {/* Full Name */}
                                 <div className="flex flex-col gap-1.5">
-                                    <label htmlFor="name" className="text-sm font-medium text-slate-700">
+                                    <label htmlFor="name" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                                         Full name
                                     </label>
                                     <input
@@ -145,7 +151,7 @@ export default function SignupPage() {
 
                                 {/* Email */}
                                 <div className="flex flex-col gap-1.5">
-                                    <label htmlFor="signup-email" className="text-sm font-medium text-slate-700">
+                                    <label htmlFor="signup-email" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                                         Work email
                                     </label>
                                     <input
@@ -161,7 +167,7 @@ export default function SignupPage() {
 
                                 {/* Password */}
                                 <div className="flex flex-col gap-1.5">
-                                    <label htmlFor="signup-password" className="text-sm font-medium text-slate-700">
+                                    <label htmlFor="signup-password" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                                         Password
                                     </label>
                                     <div className="relative">
@@ -178,7 +184,7 @@ export default function SignupPage() {
                                         <button
                                             type="button"
                                             onClick={() => setShowPassword(!showPassword)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 transition-colors"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
                                             aria-label={showPassword ? "Hide password" : "Show password"}
                                         >
                                             {showPassword ? (
@@ -206,7 +212,7 @@ export default function SignupPage() {
                                                         className={`h-1 flex-1 rounded-full transition-all duration-300 ${
                                                             i <= passwordStrength.level
                                                                 ? passwordStrength.color
-                                                                : "bg-slate-200"
+                                                                : "bg-slate-200 dark:bg-slate-700"
                                                         }`}
                                                     />
                                                 ))}
@@ -214,8 +220,8 @@ export default function SignupPage() {
                                             <span className={`text-[11px] font-medium ${
                                                 passwordStrength.level <= 1 ? "text-red-500"
                                                 : passwordStrength.level === 2 ? "text-amber-500"
-                                                : passwordStrength.level === 3 ? "text-teal-600"
-                                                : "text-emerald-600"
+                                                : passwordStrength.level === 3 ? "text-teal-600 dark:text-teal-400"
+                                                : "text-emerald-600 dark:text-emerald-400"
                                             }`}>
                                                 {passwordStrength.label}
                                             </span>
@@ -225,29 +231,29 @@ export default function SignupPage() {
 
                                 {/* Error message */}
                                 {error && (
-                                    <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2.5">
+                                    <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2.5 dark:bg-red-950/40 dark:border-red-900/50">
                                         <svg className="w-4 h-4 text-red-500 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                             <circle cx="12" cy="12" r="10" />
                                             <line x1="15" y1="9" x2="9" y2="15" />
                                             <line x1="9" y1="9" x2="15" y2="15" />
                                         </svg>
-                                        <p className="text-sm text-red-700">{error}</p>
+                                        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
                                     </div>
                                 )}
 
                                 {/* Terms notice */}
-                                <p className="text-[12px] text-slate-400 leading-relaxed">
+                                <p className="text-[12px] text-slate-400 dark:text-slate-500 leading-relaxed">
                                     By creating an account, you agree to our{" "}
-                                    <a href="#" className="text-teal-600 hover:text-teal-700 underline underline-offset-2 transition-colors">Terms of Service</a>
+                                    <a href="#" className="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 underline underline-offset-2 transition-colors">Terms of Service</a>
                                     {" "}and{" "}
-                                    <a href="#" className="text-teal-600 hover:text-teal-700 underline underline-offset-2 transition-colors">Privacy Policy</a>.
+                                    <a href="#" className="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 underline underline-offset-2 transition-colors">Privacy Policy</a>.
                                 </p>
 
                                 {/* Submit */}
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-lg py-2.5 text-sm font-semibold transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm hover:shadow-md active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+                                    className="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 dark:bg-teal-500 dark:hover:bg-teal-600 text-white rounded-lg py-2.5 text-sm font-semibold transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm hover:shadow-md active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
                                 >
                                     {loading ? (
                                         <>
@@ -270,11 +276,11 @@ export default function SignupPage() {
                         </form>
 
                         {/* Footer */}
-                        <footer className="text-center text-sm text-slate-500">
+                        <footer className="text-center text-sm text-slate-500 dark:text-slate-400">
                             Already have an account?{" "}
                             <Link
                                 href="/login"
-                                className="text-teal-600 hover:text-teal-700 font-semibold transition-colors"
+                                className="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 font-semibold transition-colors"
                             >
                                 Log in
                             </Link>
@@ -283,7 +289,7 @@ export default function SignupPage() {
                 )}
             </div>
 
-            <p className="text-[11px] text-slate-400 relative z-10 tracking-wide">
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 relative z-10 tracking-wide">
                 Protected by industry-standard encryption
             </p>
         </div>
