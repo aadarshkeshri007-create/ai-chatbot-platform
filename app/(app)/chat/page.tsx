@@ -9,6 +9,12 @@ import {
 } from "react";
 
 import { createClient } from "@/lib/supabase/client";
+import { logSupabaseError } from "@/lib/supabase/error";
+import {
+    DEFAULT_ASSISTANT_NAME,
+    DEFAULT_WELCOME_MESSAGE,
+    getAssistantSettings,
+} from "@/lib/assistant-settings";
 
 import type { Message } from "@/types/message";
 
@@ -32,6 +38,9 @@ export default function ChatPage() {
 
     const [sources, setSources] =
         useState<ChatSource[]>([]);
+    const [assistantName, setAssistantName] = useState(DEFAULT_ASSISTANT_NAME);
+    const [welcomeMessage, setWelcomeMessage] = useState(DEFAULT_WELCOME_MESSAGE);
+    const [assistantSettingsLoading, setAssistantSettingsLoading] = useState(true);
 
     const messagesContainerRef =
         useRef<HTMLElement | null>(null);
@@ -45,7 +54,7 @@ export default function ChatPage() {
                 id: "new-chat",
                 role: "assistant",
                 content:
-                    "Hello! How can I assist you today?",
+                    DEFAULT_WELCOME_MESSAGE,
             },
         ]);
 
@@ -97,6 +106,43 @@ export default function ChatPage() {
         }
     }, [messages, scrollToBottom]);
 
+    useEffect(() => {
+        const loadAssistantSettings = async () => {
+            try {
+                const supabase = createClient();
+                const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+                if (userError || !user) return;
+
+                const { data, error } = await supabase
+                    .from("profiles")
+                    .select("assistant_name, welcome_message")
+                    .eq("id", user.id)
+                    .maybeSingle();
+
+                if (error) {
+                    logSupabaseError("Assistant settings load error:", error);
+                    return;
+                }
+
+                const settings = getAssistantSettings(data);
+                setAssistantName(settings.assistantName);
+                setWelcomeMessage(settings.welcomeMessage);
+                setMessages((currentMessages) =>
+                    currentMessages.length === 1 && currentMessages[0].id === "new-chat"
+                        ? [{ ...currentMessages[0], content: settings.welcomeMessage }]
+                        : currentMessages,
+                );
+            } catch (error) {
+                console.error("Assistant settings load error:", error);
+            } finally {
+                setAssistantSettingsLoading(false);
+            }
+        };
+
+        loadAssistantSettings();
+    }, []);
+
     // Load the user's conversations
     useEffect(() => {
         const loadConversations = async () => {
@@ -141,14 +187,14 @@ export default function ChatPage() {
                 id: "new-chat",
                 role: "assistant",
                 content:
-                    "Hello! How can I assist you today?",
+                    welcomeMessage,
             },
         ]);
 
         setMessage("");
         setSources([]);
         shouldAutoScrollRef.current = true;
-    }, []);
+    }, [welcomeMessage]);
 
     const handleDeleteConversation =
         useCallback(async (
@@ -198,7 +244,7 @@ export default function ChatPage() {
                         id: "new-chat",
                         role: "assistant",
                         content:
-                            "Hello! How can I assist you today?",
+                            welcomeMessage,
                     },
                 ]);
 
@@ -207,7 +253,7 @@ export default function ChatPage() {
                 shouldAutoScrollRef.current =
                     true;
             }
-        }, [conversationId, setConversations]);
+        }, [conversationId, setConversations, welcomeMessage]);
 
     // Load a conversation
     const handleSelectConversation =
@@ -633,6 +679,9 @@ export default function ChatPage() {
                 onSuggestionClick={
                     handleSuggestionClick
                 }
+                assistantName={assistantName}
+                welcomeMessage={welcomeMessage}
+                assistantSettingsLoading={assistantSettingsLoading}
             />
 
             {sources.length > 0 && (

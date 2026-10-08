@@ -1,8 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useTheme, Theme } from "@/components/ThemeProvider";
+import { createClient } from "@/lib/supabase/client";
+import { logSupabaseError } from "@/lib/supabase/error";
+import {
+    ASSISTANT_SETTINGS_LIMITS,
+    DEFAULT_ASSISTANT_NAME,
+    DEFAULT_BUSINESS_NAME,
+    DEFAULT_WELCOME_MESSAGE,
+    getAssistantSettings,
+} from "@/lib/assistant-settings";
 
 /* ── Types ─────────────────────────────────────── */
 
@@ -22,6 +31,105 @@ export default function SettingsPage() {
 
     const [responseLength, setResponseLength] = useState<ResponseLength>("balanced");
     const [useKnowledgeBase, setUseKnowledgeBase] = useState(true);
+    const [businessName, setBusinessName] = useState(DEFAULT_BUSINESS_NAME);
+    const [assistantName, setAssistantName] = useState(DEFAULT_ASSISTANT_NAME);
+    const [welcomeMessage, setWelcomeMessage] = useState(DEFAULT_WELCOME_MESSAGE);
+    const [customInstructions, setCustomInstructions] = useState("");
+    const [identityLoading, setIdentityLoading] = useState(true);
+    const [identitySaving, setIdentitySaving] = useState(false);
+    const [identityError, setIdentityError] = useState("");
+    const [identitySuccess, setIdentitySuccess] = useState("");
+
+    useEffect(() => {
+        const loadAssistantSettings = async () => {
+            const supabase = createClient();
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+            if (userError || !user) {
+                setIdentityError("Unable to load your assistant settings.");
+                setIdentityLoading(false);
+                return;
+            }
+
+            const { data, error } = await supabase
+                .from("profiles")
+                .select("business_name, assistant_name, welcome_message, custom_instructions")
+                .eq("id", user.id)
+                .maybeSingle();
+
+            if (error) {
+                logSupabaseError("Assistant settings load error:", error);
+                setIdentityError("Unable to load your assistant settings.");
+            } else {
+                const settings = getAssistantSettings(data);
+                setBusinessName(settings.businessName);
+                setAssistantName(settings.assistantName);
+                setWelcomeMessage(settings.welcomeMessage);
+                setCustomInstructions(settings.customInstructions);
+            }
+
+            setIdentityLoading(false);
+        };
+
+        loadAssistantSettings();
+    }, []);
+
+    const handleAssistantSettingsSave = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setIdentityError("");
+        setIdentitySuccess("");
+
+        const nextBusinessName = businessName.trim();
+        const nextAssistantName = assistantName.trim();
+        const nextWelcomeMessage = welcomeMessage.trim();
+        const nextCustomInstructions = customInstructions.trim();
+
+        if (!nextBusinessName || !nextAssistantName || !nextWelcomeMessage) {
+            setIdentityError("All assistant identity fields are required.");
+            return;
+        }
+
+        setIdentitySaving(true);
+
+        const supabase = createClient();
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+            setIdentityError("Your session has expired. Please sign in again.");
+            setIdentitySaving(false);
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from("profiles")
+            .update({
+                business_name: nextBusinessName,
+                assistant_name: nextAssistantName,
+                welcome_message: nextWelcomeMessage,
+                custom_instructions: nextCustomInstructions,
+            })
+            .eq("id", user.id)
+            .select("business_name, assistant_name, welcome_message, custom_instructions")
+            .maybeSingle();
+
+        if (error) {
+            logSupabaseError("Assistant settings save error:", error);
+            setIdentityError("Unable to save your assistant settings. Please try again.");
+        } else if (!data) {
+            console.error("Assistant settings save error: profile row not found", {
+                userId: user.id,
+            });
+            setIdentityError("Your profile could not be found. Please try again after the database migration is applied.");
+        } else {
+            setBusinessName(nextBusinessName);
+            setAssistantName(nextAssistantName);
+            setWelcomeMessage(nextWelcomeMessage);
+            setCustomInstructions(nextCustomInstructions);
+            setIdentitySuccess("Assistant identity saved.");
+        }
+
+        setIdentitySaving(false);
+    };
 
     /* ── Reusable toggle ──────────────────────── */
     function Toggle({
@@ -96,22 +204,64 @@ export default function SettingsPage() {
     }
 
     return (
-        <div className="h-full min-h-0 flex-1 overflow-hidden bg-slate-50 p-4 sm:p-6 lg:p-8 dark:bg-slate-950 transition-colors duration-150 flex flex-col justify-between">
-            <div className="mx-auto w-full max-w-5xl flex flex-col flex-1 justify-between overflow-hidden">
+        <div className="h-full min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8 dark:bg-slate-950 transition-colors duration-150">
+            <div className="mx-auto w-full max-w-5xl">
                 {/* ── Fixed Header ─────────────────── */}
                 <header className="mb-3.5 shrink-0">
                     <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
                         Settings
                     </h1>
                     <p className="mt-0.5 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                        Customize your experience. Settings are stored locally in your browser.
+                        Customize your experience and your assistant identity.
                     </p>
                 </header>
 
+                <form onSubmit={handleAssistantSettingsSave} className="mb-4 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+                        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                            Assistant identity
+                        </h2>
+                        <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                            These details appear in your chat and guide your AI assistant.
+                        </p>
+                    </div>
+
+                    <fieldset disabled={identityLoading || identitySaving} className="grid gap-3 p-4 sm:grid-cols-2">
+                        <div>
+                            <label htmlFor="business-name" className="text-xs font-medium text-slate-700 dark:text-slate-300">Business Name</label>
+                            <input id="business-name" value={businessName} onChange={(event) => setBusinessName(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.businessName} required className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+                        </div>
+                        <div>
+                            <label htmlFor="assistant-name" className="text-xs font-medium text-slate-700 dark:text-slate-300">Assistant Name</label>
+                            <input id="assistant-name" value={assistantName} onChange={(event) => setAssistantName(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.assistantName} required className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+                        </div>
+                        <div className="sm:col-span-2">
+                            <label htmlFor="welcome-message" className="text-xs font-medium text-slate-700 dark:text-slate-300">Welcome Message</label>
+                            <textarea id="welcome-message" value={welcomeMessage} onChange={(event) => setWelcomeMessage(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.welcomeMessage} required rows={2} className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+                        </div>
+                        <div className="sm:col-span-2">
+                            <label htmlFor="custom-instructions" className="text-xs font-medium text-slate-700 dark:text-slate-300">Custom Instructions</label>
+                            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">Tell the assistant how it should behave when answering customers.</p>
+                            <textarea id="custom-instructions" value={customInstructions} onChange={(event) => setCustomInstructions(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.customInstructions} rows={4} className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+                            <p className="mt-1 text-right text-[11px] text-slate-400 dark:text-slate-500">{customInstructions.length}/{ASSISTANT_SETTINGS_LIMITS.customInstructions}</p>
+                        </div>
+                        <div className="flex min-h-9 items-center sm:col-span-2">
+                            {identityLoading && <p className="text-xs text-slate-500 dark:text-slate-400">Loading assistant settings…</p>}
+                            {identityError && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{identityError}</p>}
+                            {identitySuccess && <p role="status" className="text-xs text-emerald-600 dark:text-emerald-400">{identitySuccess}</p>}
+                        </div>
+                        <div className="flex justify-end sm:col-span-2">
+                            <button type="submit" disabled={identityLoading || identitySaving} className="rounded-lg bg-teal-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-teal-500 dark:hover:bg-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
+                                {identitySaving ? "Saving…" : "Save assistant identity"}
+                            </button>
+                        </div>
+                    </fieldset>
+                </form>
+
                 {/* ── 2-Column Compact Grid (Fits 100% within viewport, completely unscrollable) ── */}
-                <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 lg:gap-4 flex-1 overflow-hidden">
+                <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 lg:gap-4">
                     {/* LEFT COLUMN */}
-                    <div className="flex flex-col gap-3.5 justify-between overflow-hidden">
+                    <div className="flex flex-col gap-3.5">
                         {/* 1. GENERAL */}
                         <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
                             <div className="border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
@@ -235,7 +385,7 @@ export default function SettingsPage() {
                     </div>
 
                     {/* RIGHT COLUMN */}
-                    <div className="flex flex-col gap-3.5 justify-between overflow-hidden">
+                    <div className="flex flex-col gap-3.5">
                         {/* 3. AI PREFERENCES */}
                         <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
                             <div className="border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
@@ -336,7 +486,7 @@ export default function SettingsPage() {
 
                 {/* ── Notice Footer ────────────── */}
                 <div className="mt-3 shrink-0 rounded-lg border border-slate-200 bg-white/70 px-3.5 py-2 text-center text-[11px] text-slate-400 shadow-sm dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-500">
-                    Settings are stored locally in your browser and are not yet synced to your account.
+                    Assistant identity is securely synced to your account. Other settings are stored locally in your browser.
                 </div>
             </div>
         </div>

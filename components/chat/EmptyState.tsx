@@ -1,5 +1,8 @@
 type EmptyStateProps = {
   onSuggestionClick?: (text: string) => void;
+  assistantName: string;
+  welcomeMessage: string;
+  loading: boolean;
 };
 
 const suggestions = [
@@ -8,7 +11,12 @@ const suggestions = [
   "I need help with my recent order",
 ];
 
-export default function EmptyState({ onSuggestionClick }: EmptyStateProps) {
+export default function EmptyState({
+  onSuggestionClick,
+  assistantName,
+  welcomeMessage,
+  loading,
+}: EmptyStateProps) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-4">
       <div className="flex max-w-md flex-col items-center text-center">
@@ -33,12 +41,21 @@ export default function EmptyState({ onSuggestionClick }: EmptyStateProps) {
           </svg>
         </div>
 
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-          How can I help you today?
-        </h2>
-        <p className="mt-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
-          Ask a question about your account, orders, or anything else — I&apos;m here to help.
-        </p>
+        {loading ? (
+          <div className="mt-1 flex w-full max-w-xs animate-pulse flex-col items-center gap-2" aria-label="Loading assistant details">
+            <div className="h-5 w-32 rounded bg-slate-200 dark:bg-slate-800" />
+            <div className="h-4 w-full rounded bg-slate-200 dark:bg-slate-800" />
+          </div>
+        ) : (
+          <>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              {assistantName}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+              {welcomeMessage}
+            </p>
+          </>
+        )}
 
         {/* Suggestion chips */}
         {onSuggestionClick && (

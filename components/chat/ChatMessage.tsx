@@ -9,6 +9,9 @@ type ChatMessagesProps = {
   onScroll: () => void;
   loading: boolean;
   onSuggestionClick?: (text: string) => void;
+  assistantName: string;
+  welcomeMessage: string;
+  assistantSettingsLoading: boolean;
 };
 
 export default function ChatMessages({
@@ -17,6 +20,9 @@ export default function ChatMessages({
   onScroll,
   loading,
   onSuggestionClick,
+  assistantName,
+  welcomeMessage,
+  assistantSettingsLoading,
 }: ChatMessagesProps) {
   // Determine if this is a "new chat" empty state:
   // single welcome message from assistant
@@ -40,7 +46,12 @@ export default function ChatMessages({
       className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-50 px-4 py-6 scrollbar-thin [overflow-anchor:none] sm:px-6 dark:bg-slate-950 transition-colors duration-150"
     >
       {isNewChat ? (
-        <EmptyState onSuggestionClick={onSuggestionClick} />
+        <EmptyState
+          assistantName={assistantName}
+          welcomeMessage={welcomeMessage}
+          loading={assistantSettingsLoading}
+          onSuggestionClick={onSuggestionClick}
+        />
       ) : (
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
           {messages.map((message) => {
