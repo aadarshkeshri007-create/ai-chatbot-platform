@@ -4,13 +4,15 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useTheme, Theme } from "@/components/ThemeProvider";
 import { createClient } from "@/lib/supabase/client";
-import { logSupabaseError } from "@/lib/supabase/error";
+import { isMissingSchemaFieldError, logSupabaseError } from "@/lib/supabase/error";
 import {
     ASSISTANT_SETTINGS_LIMITS,
     DEFAULT_ASSISTANT_NAME,
     DEFAULT_BUSINESS_NAME,
     DEFAULT_WELCOME_MESSAGE,
+    MAX_SUGGESTED_QUESTIONS,
     getAssistantSettings,
+    parseSuggestedQuestions,
 } from "@/lib/assistant-settings";
 
 /* ── Types ─────────────────────────────────────── */
@@ -35,6 +37,8 @@ export default function SettingsPage() {
     const [assistantName, setAssistantName] = useState(DEFAULT_ASSISTANT_NAME);
     const [welcomeMessage, setWelcomeMessage] = useState(DEFAULT_WELCOME_MESSAGE);
     const [customInstructions, setCustomInstructions] = useState("");
+    const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+    const [suggestedQuestionsAvailable, setSuggestedQuestionsAvailable] = useState(true);
     const [identityLoading, setIdentityLoading] = useState(true);
     const [identitySaving, setIdentitySaving] = useState(false);
     const [identityError, setIdentityError] = useState("");
@@ -51,11 +55,26 @@ export default function SettingsPage() {
                 return;
             }
 
-            const { data, error } = await supabase
+            let { data, error } = await supabase
                 .from("profiles")
-                .select("business_name, assistant_name, welcome_message, custom_instructions")
+                .select("business_name, assistant_name, welcome_message, custom_instructions, suggested_questions")
                 .eq("id", user.id)
                 .maybeSingle();
+
+            if (isMissingSchemaFieldError(error)) {
+                // suggested_questions ships in its own migration. Until that
+                // migration is applied, keep the rest of the settings working.
+                console.warn(
+                    "Assistant settings: suggested_questions is not available, hiding suggested questions.",
+                    { code: error?.code, message: error?.message },
+                );
+                setSuggestedQuestionsAvailable(false);
+                ({ data, error } = await supabase
+                    .from("profiles")
+                    .select("business_name, assistant_name, welcome_message, custom_instructions")
+                    .eq("id", user.id)
+                    .maybeSingle());
+            }
 
             if (error) {
                 logSupabaseError("Assistant settings load error:", error);
@@ -66,6 +85,7 @@ export default function SettingsPage() {
                 setAssistantName(settings.assistantName);
                 setWelcomeMessage(settings.welcomeMessage);
                 setCustomInstructions(settings.customInstructions);
+                setSuggestedQuestions(parseSuggestedQuestions(data?.suggested_questions));
             }
 
             setIdentityLoading(false);
@@ -73,6 +93,24 @@ export default function SettingsPage() {
 
         loadAssistantSettings();
     }, []);
+
+    const handleSuggestedQuestionChange = (index: number, value: string) => {
+        setSuggestedQuestions((current) =>
+            current.map((question, position) => (position === index ? value : question)),
+        );
+    };
+
+    const handleAddSuggestedQuestion = () => {
+        setSuggestedQuestions((current) =>
+            current.length >= MAX_SUGGESTED_QUESTIONS ? current : [...current, ""],
+        );
+    };
+
+    const handleRemoveSuggestedQuestion = (index: number) => {
+        setSuggestedQuestions((current) =>
+            current.filter((_, position) => position !== index),
+        );
+    };
 
     const handleAssistantSettingsSave = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -83,9 +121,31 @@ export default function SettingsPage() {
         const nextAssistantName = assistantName.trim();
         const nextWelcomeMessage = welcomeMessage.trim();
         const nextCustomInstructions = customInstructions.trim();
+        const nextSuggestedQuestions = suggestedQuestions
+            .map((question) => question.trim())
+            .filter((question) => question.length > 0);
 
         if (!nextBusinessName || !nextAssistantName || !nextWelcomeMessage) {
             setIdentityError("All assistant identity fields are required.");
+            return;
+        }
+
+        if (nextSuggestedQuestions.length > MAX_SUGGESTED_QUESTIONS) {
+            setIdentityError(
+                `You can save up to ${MAX_SUGGESTED_QUESTIONS} suggested questions.`,
+            );
+            return;
+        }
+
+        if (
+            nextSuggestedQuestions.some(
+                (question) =>
+                    question.length > ASSISTANT_SETTINGS_LIMITS.suggestedQuestion,
+            )
+        ) {
+            setIdentityError(
+                `Each suggested question must be ${ASSISTANT_SETTINGS_LIMITS.suggestedQuestion} characters or fewer.`,
+            );
             return;
         }
 
@@ -107,9 +167,16 @@ export default function SettingsPage() {
                 assistant_name: nextAssistantName,
                 welcome_message: nextWelcomeMessage,
                 custom_instructions: nextCustomInstructions,
+                ...(suggestedQuestionsAvailable
+                    ? { suggested_questions: nextSuggestedQuestions }
+                    : {}),
             })
             .eq("id", user.id)
-            .select("business_name, assistant_name, welcome_message, custom_instructions")
+            .select(
+                suggestedQuestionsAvailable
+                    ? "business_name, assistant_name, welcome_message, custom_instructions, suggested_questions"
+                    : "business_name, assistant_name, welcome_message, custom_instructions",
+            )
             .maybeSingle();
 
         if (error) {
@@ -125,7 +192,8 @@ export default function SettingsPage() {
             setAssistantName(nextAssistantName);
             setWelcomeMessage(nextWelcomeMessage);
             setCustomInstructions(nextCustomInstructions);
-            setIdentitySuccess("Assistant identity saved.");
+            setSuggestedQuestions(nextSuggestedQuestions);
+            setIdentitySuccess("Assistant settings saved.");
         }
 
         setIdentitySaving(false);
@@ -245,6 +313,56 @@ export default function SettingsPage() {
                             <textarea id="custom-instructions" value={customInstructions} onChange={(event) => setCustomInstructions(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.customInstructions} rows={4} className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
                             <p className="mt-1 text-right text-[11px] text-slate-400 dark:text-slate-500">{customInstructions.length}/{ASSISTANT_SETTINGS_LIMITS.customInstructions}</p>
                         </div>
+                        <div className="sm:col-span-2 mt-1 border-t border-slate-100 pt-3 dark:border-slate-800">
+                            <div className="flex items-baseline justify-between gap-3">
+                                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Suggested Questions</h3>
+                                {suggestedQuestionsAvailable && (
+                                    <span className="text-[11px] text-slate-400 dark:text-slate-500">{suggestedQuestions.length}/{MAX_SUGGESTED_QUESTIONS}</span>
+                                )}
+                            </div>
+                            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                                Show up to {MAX_SUGGESTED_QUESTIONS} questions in your chat before a customer types. Defaults are shown when none are saved.
+                            </p>
+                            {!suggestedQuestionsAvailable && (
+                                <p role="status" className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
+                                    Not available yet — the database migration that adds the suggested questions column has not been applied.
+                                </p>
+                            )}
+                            {suggestedQuestionsAvailable && (
+                                <div className="mt-2 flex flex-col gap-2">
+                                    {suggestedQuestions.map((question, index) => (
+                                        <div key={index} className="flex items-center gap-2">
+                                            <input
+                                                value={question}
+                                                onChange={(event) => handleSuggestedQuestionChange(index, event.target.value)}
+                                                maxLength={ASSISTANT_SETTINGS_LIMITS.suggestedQuestion}
+                                                placeholder="e.g. What is your return policy?"
+                                                aria-label={`Suggested question ${index + 1}`}
+                                                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveSuggestedQuestion(index)}
+                                                aria-label={`Remove suggested question ${index + 1}`}
+                                                className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-medium text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-400 dark:hover:border-red-900 dark:hover:bg-red-950/30 dark:hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <div>
+                                        <button
+                                            type="button"
+                                            onClick={handleAddSuggestedQuestion}
+                                            disabled={suggestedQuestions.length >= MAX_SUGGESTED_QUESTIONS}
+                                            className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:border-teal-200 hover:bg-teal-50/50 hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:border-teal-600/50 dark:hover:bg-teal-950/30 dark:hover:text-teal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+                                        >
+                                            + Add question
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         <div className="flex min-h-9 items-center sm:col-span-2">
                             {identityLoading && <p className="text-xs text-slate-500 dark:text-slate-400">Loading assistant settings…</p>}
                             {identityError && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{identityError}</p>}
@@ -252,7 +370,7 @@ export default function SettingsPage() {
                         </div>
                         <div className="flex justify-end sm:col-span-2">
                             <button type="submit" disabled={identityLoading || identitySaving} className="rounded-lg bg-teal-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-teal-500 dark:hover:bg-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
-                                {identitySaving ? "Saving…" : "Save assistant identity"}
+                                {identitySaving ? "Saving…" : "Save assistant settings"}
                             </button>
                         </div>
                     </fieldset>

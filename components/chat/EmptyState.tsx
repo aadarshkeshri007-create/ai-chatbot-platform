@@ -2,19 +2,15 @@ type EmptyStateProps = {
   onSuggestionClick?: (text: string) => void;
   assistantName: string;
   welcomeMessage: string;
+  suggestions: string[];
   loading: boolean;
 };
-
-const suggestions = [
-  "How do I reset my password?",
-  "What are your business hours?",
-  "I need help with my recent order",
-];
 
 export default function EmptyState({
   onSuggestionClick,
   assistantName,
   welcomeMessage,
+  suggestions,
   loading,
 }: EmptyStateProps) {
   return (
@@ -57,12 +53,13 @@ export default function EmptyState({
           </>
         )}
 
-        {/* Suggestion chips */}
-        {onSuggestionClick && (
+        {/* Suggestion chips — withheld until the configured questions load so a
+            business never briefly sees the default questions. */}
+        {!loading && onSuggestionClick && suggestions.length > 0 && (
           <div className="mt-6 flex flex-col gap-2 w-full">
-            {suggestions.map((suggestion) => (
+            {suggestions.map((suggestion, index) => (
               <button
-                key={suggestion}
+                key={`${index}-${suggestion}`}
                 type="button"
                 onClick={() => onSuggestionClick(suggestion)}
                 className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-left text-sm text-slate-600 shadow-sm transition-all duration-150 hover:border-teal-200 hover:bg-teal-50/50 hover:text-teal-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-teal-600/50 dark:hover:bg-teal-950/30 dark:hover:text-teal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"

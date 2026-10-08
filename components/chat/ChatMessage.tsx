@@ -11,6 +11,7 @@ type ChatMessagesProps = {
   onSuggestionClick?: (text: string) => void;
   assistantName: string;
   welcomeMessage: string;
+  suggestions: string[];
   assistantSettingsLoading: boolean;
 };
 
@@ -22,6 +23,7 @@ export default function ChatMessages({
   onSuggestionClick,
   assistantName,
   welcomeMessage,
+  suggestions,
   assistantSettingsLoading,
 }: ChatMessagesProps) {
   // Determine if this is a "new chat" empty state:
@@ -49,6 +51,7 @@ export default function ChatMessages({
         <EmptyState
           assistantName={assistantName}
           welcomeMessage={welcomeMessage}
+          suggestions={suggestions}
           loading={assistantSettingsLoading}
           onSuggestionClick={onSuggestionClick}
         />

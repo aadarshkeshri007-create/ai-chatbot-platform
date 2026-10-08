@@ -9,9 +9,10 @@ import {
 } from "react";
 
 import { createClient } from "@/lib/supabase/client";
-import { logSupabaseError } from "@/lib/supabase/error";
+import { isMissingSchemaFieldError, logSupabaseError } from "@/lib/supabase/error";
 import {
     DEFAULT_ASSISTANT_NAME,
+    DEFAULT_SUGGESTED_QUESTIONS,
     DEFAULT_WELCOME_MESSAGE,
     getAssistantSettings,
 } from "@/lib/assistant-settings";
@@ -40,6 +41,9 @@ export default function ChatPage() {
         useState<ChatSource[]>([]);
     const [assistantName, setAssistantName] = useState(DEFAULT_ASSISTANT_NAME);
     const [welcomeMessage, setWelcomeMessage] = useState(DEFAULT_WELCOME_MESSAGE);
+    const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([
+        ...DEFAULT_SUGGESTED_QUESTIONS,
+    ]);
     const [assistantSettingsLoading, setAssistantSettingsLoading] = useState(true);
 
     const messagesContainerRef =
@@ -114,11 +118,26 @@ export default function ChatPage() {
 
                 if (userError || !user) return;
 
-                const { data, error } = await supabase
+                let { data, error } = await supabase
                     .from("profiles")
-                    .select("assistant_name, welcome_message")
+                    .select("assistant_name, welcome_message, suggested_questions")
                     .eq("id", user.id)
                     .maybeSingle();
+
+                if (isMissingSchemaFieldError(error)) {
+                    // suggested_questions ships in its own migration. Until that
+                    // migration is applied, load the core assistant identity and
+                    // fall back to the default questions instead of failing.
+                    console.warn(
+                        "Assistant settings: suggested_questions is not available, using the default suggested questions.",
+                        { code: error?.code, message: error?.message },
+                    );
+                    ({ data, error } = await supabase
+                        .from("profiles")
+                        .select("assistant_name, welcome_message")
+                        .eq("id", user.id)
+                        .maybeSingle());
+                }
 
                 if (error) {
                     logSupabaseError("Assistant settings load error:", error);
@@ -128,6 +147,7 @@ export default function ChatPage() {
                 const settings = getAssistantSettings(data);
                 setAssistantName(settings.assistantName);
                 setWelcomeMessage(settings.welcomeMessage);
+                setSuggestedQuestions(settings.suggestedQuestions);
                 setMessages((currentMessages) =>
                     currentMessages.length === 1 && currentMessages[0].id === "new-chat"
                         ? [{ ...currentMessages[0], content: settings.welcomeMessage }]
@@ -681,6 +701,7 @@ export default function ChatPage() {
                 }
                 assistantName={assistantName}
                 welcomeMessage={welcomeMessage}
+                suggestions={suggestedQuestions}
                 assistantSettingsLoading={assistantSettingsLoading}
             />
 
