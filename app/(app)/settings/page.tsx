@@ -39,6 +39,9 @@ export default function SettingsPage() {
     const [customInstructions, setCustomInstructions] = useState("");
     const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
     const [suggestedQuestionsAvailable, setSuggestedQuestionsAvailable] = useState(true);
+    const [assistantId, setAssistantId] = useState<string | null>(null);
+    const [assistantIdError, setAssistantIdError] = useState("");
+    const [assistantIdCopyStatus, setAssistantIdCopyStatus] = useState("");
     const [identityLoading, setIdentityLoading] = useState(true);
     const [identitySaving, setIdentitySaving] = useState(false);
     const [identityError, setIdentityError] = useState("");
@@ -51,6 +54,7 @@ export default function SettingsPage() {
 
             if (userError || !user) {
                 setIdentityError("Unable to load your assistant settings.");
+                setAssistantIdError("Unable to load your Assistant ID.");
                 setIdentityLoading(false);
                 return;
             }
@@ -88,11 +92,49 @@ export default function SettingsPage() {
                 setSuggestedQuestions(parseSuggestedQuestions(data?.suggested_questions));
             }
 
+            const { data: profile, error: assistantIdLoadError } = await supabase
+                .from("profiles")
+                .select("assistant_id")
+                .eq("id", user.id)
+                .maybeSingle();
+
+            if (assistantIdLoadError) {
+                if (isMissingSchemaFieldError(assistantIdLoadError)) {
+                    console.warn(
+                        "Assistant ID is unavailable until its database migration is applied.",
+                        { code: assistantIdLoadError.code, message: assistantIdLoadError.message },
+                    );
+                    setAssistantIdError(
+                        "Your Assistant ID will appear after the database migration is applied.",
+                    );
+                } else {
+                    logSupabaseError("Assistant ID load error:", assistantIdLoadError);
+                    setAssistantIdError("Unable to load your Assistant ID.");
+                }
+            } else if (!profile?.assistant_id) {
+                setAssistantIdError("No Assistant ID is available for your profile yet.");
+            } else {
+                setAssistantId(profile.assistant_id);
+            }
+
             setIdentityLoading(false);
         };
 
         loadAssistantSettings();
     }, []);
+
+    const handleCopyAssistantId = async () => {
+        if (!assistantId) return;
+
+        try {
+            await navigator.clipboard.writeText(assistantId);
+            setAssistantIdCopyStatus("Assistant ID copied.");
+        } catch {
+            setAssistantIdCopyStatus(
+                "Unable to copy the Assistant ID. Please copy it manually.",
+            );
+        }
+    };
 
     const handleSuggestedQuestionChange = (index: number, value: string) => {
         setSuggestedQuestions((current) =>
@@ -375,6 +417,52 @@ export default function SettingsPage() {
                         </div>
                     </fieldset>
                 </form>
+
+                <section
+                    aria-labelledby="assistant-id-heading"
+                    className="mb-4 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                >
+                    <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+                        <h2
+                            id="assistant-id-heading"
+                            className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300"
+                        >
+                            Assistant ID
+                        </h2>
+                        <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                            Use this ID later to connect your assistant to a website.
+                        </p>
+                    </div>
+                    <div className="flex flex-col gap-2 p-4 sm:flex-row">
+                        <input
+                            aria-label="Assistant ID"
+                            readOnly
+                            value={assistantId ?? ""}
+                            placeholder={identityLoading ? "Loading..." : ""}
+                            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                        />
+                        <button
+                            type="button"
+                            onClick={handleCopyAssistantId}
+                            disabled={!assistantId}
+                            className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900"
+                        >
+                            Copy
+                        </button>
+                    </div>
+                    {(assistantIdError || assistantIdCopyStatus) && (
+                        <p
+                            role={assistantIdError ? "alert" : "status"}
+                            className={`px-4 pb-4 text-xs ${
+                                assistantIdError
+                                    ? "text-amber-600 dark:text-amber-400"
+                                    : "text-emerald-600 dark:text-emerald-400"
+                            }`}
+                        >
+                            {assistantIdError || assistantIdCopyStatus}
+                        </p>
+                    )}
+                </section>
 
                 {/* ── 2-Column Compact Grid (Fits 100% within viewport, completely unscrollable) ── */}
                 <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 lg:gap-4">
