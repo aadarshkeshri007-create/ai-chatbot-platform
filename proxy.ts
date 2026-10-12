@@ -3,9 +3,20 @@ import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export async function proxy(request: NextRequest) {
-    let response = NextResponse.next({
-        request,
-    });
+    const response = NextResponse.next();
+    const pathname = request.nextUrl.pathname;
+
+    // The public chat route validates its own POST body and authentication
+    // does not apply. Keep the exception exact; all other paths still use the
+    // existing session checks below.
+    if (
+        pathname === "/widget.js" ||
+        pathname === "/widget-frame" ||
+        (pathname === "/api/public/chat" &&
+            (request.method === "POST" || request.method === "OPTIONS"))
+    ) {
+        return response;
+    }
 
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -27,8 +38,6 @@ export async function proxy(request: NextRequest) {
     const {
         data: { user },
     } = await supabase.auth.getUser();
-
-    const pathname = request.nextUrl.pathname;
 
     const isPublicPage =
         pathname === "/" ||

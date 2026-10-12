@@ -1,5 +1,56 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Embeddable SupportAI widget
+
+The public widget is served from `/widget.js` and uses the public assistant ID
+from `data-assistant-id`. It does not require React on the host website:
+
+```html
+<script
+  src="https://YOUR_DEPLOYED_DOMAIN/widget.js"
+  data-assistant-id="2523d5cb-9fdc-4e73-9739-7d89d708c2aa"
+  defer
+></script>
+```
+
+The widget derives the API origin from the script URL and sends messages to
+`/api/public/chat`. The assistant ID is public configuration, not a secret.
+The service-role key and private profile data remain server-side.
+
+### CORS configuration
+
+Set `PUBLIC_CHAT_ALLOWED_ORIGINS` in the deployed application environment to a
+comma-separated list of exact website origins, including scheme and port when
+needed:
+
+```text
+PUBLIC_CHAT_ALLOWED_ORIGINS=https://customer.example,https://www.customer.example
+```
+
+The public chat route accepts same-origin requests and allowlisted cross-origin
+requests. It handles `OPTIONS` preflight requests, returns `Vary: Origin`, and
+does not support a wildcard origin. Requests from origins not in the explicit
+allowlist are rejected. CORS is only a browser access control; it is not
+authentication.
+
+### Local testing
+
+1. Start SupportAI with `npm run dev`.
+2. Set `PUBLIC_CHAT_ALLOWED_ORIGINS=http://localhost:8080` in `.env.local` and
+   restart the dev server.
+3. Serve a separate test page from another origin, for example:
+   `npx serve . -l 8080`.
+4. Add the script tag above to that page, using
+   `http://localhost:3000/widget.js` and the development assistant ID.
+5. Open the page at `http://localhost:8080` and test a handbook question and an
+   unrelated question. Inspect the browser Network panel for the preflight and
+   `POST /api/public/chat` requests.
+
+For deployment, set `GEMINI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, the
+`NEXT_PUBLIC_SUPABASE_URL` and publishable key for the intended Supabase
+project, and `PUBLIC_CHAT_ALLOWED_ORIGINS` in the server environment. Apply
+the existing Supabase migrations before enabling the widget.
+
 ## Getting Started
 
 First, run the development server:
