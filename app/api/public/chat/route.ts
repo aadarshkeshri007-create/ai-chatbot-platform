@@ -5,6 +5,7 @@ import {
   publicChatJson,
   publicChatOptions,
 } from "@/lib/public-chat-cors";
+import { checkPublicChatRateLimit } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -15,8 +16,6 @@ const MATCH_COUNT = 3;
 const MATCH_THRESHOLD = 0.6;
 const MAX_MESSAGE_LENGTH = 8000;
 const MAX_REQUEST_BYTES = 32 * 1024;
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX_REQUESTS = 20;
 const assistantIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -44,60 +43,6 @@ type RetrievedChunk = {
 
 type VectorChunk = RetrievedChunk & { similarity: number };
 type KeywordChunk = RetrievedChunk & { rank: number };
-
-type RateLimitEntry = {
-  count: number;
-  resetAt: number;
-};
-
-const rateLimitEntries = new Map<string, RateLimitEntry>();
-
-function getClientIp(request: Request): string {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor) {
-    const first = forwardedFor.split(",")[0]?.trim();
-    if (first) return first;
-  }
-
-  const realIp = request.headers.get("x-real-ip")?.trim();
-  if (realIp) return realIp;
-
-  // When no proxy headers are present (e.g. local development or direct
-  // access without a reverse proxy) fall back to a shared bucket so the
-  // rate limiter still applies without rejecting every request outright.
-  return "no-ip-header";
-}
-
-function checkRateLimit(request: Request) {
-  const ip = getClientIp(request);
-
-  const now = Date.now();
-  for (const [entryIp, entry] of rateLimitEntries) {
-    if (entry.resetAt <= now) {
-      rateLimitEntries.delete(entryIp);
-    }
-  }
-
-  const current = rateLimitEntries.get(ip);
-
-  if (!current || current.resetAt <= now) {
-    rateLimitEntries.set(ip, {
-      count: 1,
-      resetAt: now + RATE_LIMIT_WINDOW_MS,
-    });
-    return { allowed: true };
-  }
-
-  if (current.count >= RATE_LIMIT_MAX_REQUESTS) {
-    return {
-      allowed: false,
-      retryAfter: Math.ceil((current.resetAt - now) / 1000),
-    };
-  }
-
-  current.count += 1;
-  return { allowed: true };
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -161,18 +106,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const rateLimit = checkRateLimit(request);
-  if (!rateLimit.allowed) {
-    const response = publicChatJson(
-      request,
-      { error: "Too many requests. Please try again later." },
-      { status: 429 },
-    );
-    if (rateLimit.retryAfter) {
-      response.headers.set("Retry-After", String(rateLimit.retryAfter));
-    }
-    return response;
-  }
+
 
   try {
     let body: unknown;
@@ -219,6 +153,27 @@ export async function POST(request: Request) {
         request,
         { error: "Message is too long. Please keep it under 8,000 characters." },
         { status: 400 },
+      );
+    }
+
+    const rateLimit = await checkPublicChatRateLimit(request, assistantId);
+    if (rateLimit.status === "rate_limited") {
+      const response = publicChatJson(
+        request,
+        { error: "Too many requests. Please try again later." },
+        { status: 429 },
+      );
+      if (rateLimit.retryAfter) {
+        response.headers.set("Retry-After", String(rateLimit.retryAfter));
+      }
+      return response;
+    }
+
+    if (rateLimit.status === "service_unavailable") {
+      return publicChatJson(
+        request,
+        { error: "Service temporarily unavailable. Please try again later." },
+        { status: 503 },
       );
     }
 
