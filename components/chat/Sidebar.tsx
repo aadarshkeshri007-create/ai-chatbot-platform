@@ -64,6 +64,17 @@ const MAIN_NAV_ITEMS: {
             </svg>
         ),
     },
+    {
+        label: "Support Inbox",
+        href: "/handoffs",
+        icon: (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 4h16v12H4z" />
+                <path d="m4 6 8 6 8-6" />
+                <path d="M8 20h8" />
+            </svg>
+        ),
+    },
 ];
 
 const BOTTOM_NAV_ITEMS: {

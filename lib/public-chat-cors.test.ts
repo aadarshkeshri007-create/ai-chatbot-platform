@@ -87,3 +87,23 @@ test("preflight retains global CORS behavior", () => {
     null,
   );
 });
+
+test("allows only the exact local widget demo origin in development", () => {
+  const configured = new Set(["http://127.0.0.1:5500"]);
+  assert.equal(
+    getAllowedPublicChatOrigin(
+      "http://127.0.0.1:5500",
+      "http://localhost:3000/api/public/chat",
+      configured,
+    ),
+    "http://127.0.0.1:5500",
+  );
+  assert.equal(
+    getAllowedPublicChatOrigin(
+      "http://localhost:5500",
+      "http://localhost:3000/api/public/chat",
+      configured,
+    ),
+    null,
+  );
+});

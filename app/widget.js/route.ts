@@ -15,6 +15,11 @@ const widgetScript = `(() => {
   const requestTimeoutMs = 30000;
   const maxRetryAfterSeconds = 300;
   const pendingRequests = new Set();
+  const debugWidget = (stage, details) => {
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      console.debug("[SupportAI widget] " + stage, details);
+    }
+  };
   function publicErrorForStatus(status) {
     if (status === 400 || status === 413) return "Please check your message and try again.";
     if (status === 403) return "This assistant is not available from this website.";
@@ -67,7 +72,8 @@ const widgetScript = `(() => {
   const frame = root.querySelector(".frame");
   if (!(launcher instanceof HTMLButtonElement) || !(frame instanceof HTMLIFrameElement)) return;
 
-  frame.src = appOrigin + "/widget-frame?assistant_id=" + encodeURIComponent(assistantId);
+  frame.src = appOrigin + "/widget-frame?assistant_id=" + encodeURIComponent(assistantId) +
+    "&parent_origin=" + encodeURIComponent(window.location.origin);
 
   function openWidget() {
     frame.hidden = false;
@@ -88,36 +94,68 @@ const widgetScript = `(() => {
   });
 
   async function handleChatRequest(event) {
+    debugWidget("parent-message-received", {
+      type: event.data && typeof event.data === "object" ? event.data.type || "unknown" : "invalid",
+    });
     if (event.source !== frame.contentWindow || event.origin !== appOrigin) return;
     const data = event.data;
     if (
       typeof data !== "object" ||
       data === null ||
       Array.isArray(data) ||
-      data.type !== "supportai:chat-request"
+      (data.type !== "supportai:chat-request" &&
+        data.type !== "supportai:handoff-request" &&
+        data.type !== "supportai:handoff-poll")
     ) return;
     if (
       typeof data.requestId !== "string" ||
       data.requestId.length === 0 ||
       data.requestId.length > 128 ||
-      typeof data.message !== "string" ||
-      !data.message.trim() ||
-      data.message.length > maxMessageLength ||
       pendingRequests.has(data.requestId)
     ) return;
+    if (data.type === "supportai:chat-request" &&
+      (typeof data.message !== "string" || !data.message.trim() || data.message.length > maxMessageLength)) return;
+    if (data.type === "supportai:handoff-request" &&
+      (typeof data.reason !== "string" || !data.reason.trim() || data.reason.length > 2000 ||
+        !Array.isArray(data.transcript) || data.transcript.length > 50)) return;
+    if (data.type === "supportai:handoff-poll" &&
+      (typeof data.handoffId !== "string" || typeof data.accessToken !== "string" ||
+        data.handoffId.length > 100 || data.accessToken.length > 200)) return;
 
     const requestId = data.requestId;
+    const isChat = data.type === "supportai:chat-request";
+    const isHandoff = data.type === "supportai:handoff-request";
     pendingRequests.add(requestId);
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), requestTimeoutMs);
 
     try {
-      const response = await fetch(appOrigin + "/api/public/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assistant_id: assistantId, message: data.message.trim() }),
-        signal: controller.signal,
-      });
+      debugWidget("fetch-dispatch", { type: data.type, requestId });
+      const response = await fetch(
+        isChat
+          ? appOrigin + "/api/public/chat"
+          : isHandoff
+            ? appOrigin + "/api/public/handoff"
+            : appOrigin + "/api/public/handoff?handoff_id=" +
+              encodeURIComponent(data.handoffId) + "&access_token=" +
+              encodeURIComponent(data.accessToken),
+        {
+          method: isChat ? "POST" : isHandoff ? "POST" : "GET",
+          headers: isChat || isHandoff ? { "Content-Type": "application/json" } : undefined,
+          body: isChat
+            ? JSON.stringify({ assistant_id: assistantId, message: data.message.trim() })
+            : isHandoff
+              ? JSON.stringify({
+                  assistant_id: assistantId,
+                  customer_name: data.customerName,
+                  customer_email: data.customerEmail,
+                  reason: data.reason,
+                  transcript: data.transcript,
+                })
+              : undefined,
+          signal: controller.signal,
+        },
+      );
       let payload;
       let validJson = true;
       try {
@@ -145,11 +183,12 @@ const widgetScript = `(() => {
       const retryAfterSeconds = Number.isSafeInteger(retryAfterNumber)
         ? Math.min(retryAfterNumber, maxRetryAfterSeconds)
         : null;
+      debugWidget("fetch-response", { type: data.type, requestId, status: response.status });
 
       if (frame.contentWindow) {
         frame.contentWindow.postMessage(
           {
-            type: "supportai:chat-response",
+            type: isChat ? "supportai:chat-response" : "supportai:handoff-response",
             requestId,
             ok: response.ok && validJson,
             ...(response.ok && validJson
@@ -167,7 +206,7 @@ const widgetScript = `(() => {
       if (frame.contentWindow) {
         frame.contentWindow.postMessage(
           {
-            type: "supportai:chat-response",
+          type: isChat ? "supportai:chat-response" : "supportai:handoff-response",
             requestId,
             ok: false,
             error: error?.name === "AbortError"

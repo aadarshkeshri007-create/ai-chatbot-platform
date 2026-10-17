@@ -5,7 +5,7 @@ import {
 } from "./public-chat-origin";
 
 function configuredOrigins(): Set<string> {
-  return new Set(
+  const origins = new Set(
     (process.env.PUBLIC_CHAT_ALLOWED_ORIGINS ?? "")
       .split(",")
       .map((origin) => origin.trim())
@@ -18,6 +18,10 @@ function configuredOrigins(): Set<string> {
       })
       .filter(Boolean),
   );
+  if (process.env.NODE_ENV !== "production") {
+    origins.add("http://127.0.0.1:5500");
+  }
+  return origins;
 }
 
 export function isAllowedAssistantOrigin(
@@ -70,9 +74,12 @@ export function publicChatJson(
   return withPublicChatCors(request, NextResponse.json(body, init), allowedDomains);
 }
 
-export function publicChatOptions(request: Request): NextResponse {
+export function publicChatOptions(
+  request: Request,
+  methods = "POST, OPTIONS",
+): NextResponse {
   const response = new NextResponse(null, { status: 204 });
-  response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  response.headers.set("Access-Control-Allow-Methods", methods);
   response.headers.set("Access-Control-Allow-Headers", "Content-Type");
   return withPublicChatCors(request, response);
 }

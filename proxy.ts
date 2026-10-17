@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export async function proxy(request: NextRequest) {
-    let response = NextResponse.next({
+    const response = NextResponse.next({
         request: {
             headers: request.headers,
         },
@@ -16,6 +16,7 @@ export async function proxy(request: NextRequest) {
     if (
         pathname === "/widget.js" ||
         pathname === "/widget-frame" ||
+        pathname === "/api/public/handoff" ||
         (pathname === "/api/public/chat" &&
             (request.method === "POST" || request.method === "OPTIONS"))
     ) {

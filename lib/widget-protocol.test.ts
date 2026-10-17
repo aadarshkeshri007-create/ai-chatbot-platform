@@ -3,12 +3,37 @@ import test from "node:test";
 
 import {
   formatRateLimitMessage,
+  classifyWidgetSender,
   isWidgetChatRequest,
   isWidgetChatResponse,
   isTrustedWidgetMessage,
   parseRetryAfterSeconds,
+  resolveWidgetParentOrigin,
   WIDGET_MAX_MESSAGE_LENGTH,
 } from "./widget-protocol.ts";
+
+test("classifies sender from authoritative message role", () => {
+  assert.equal(classifyWidgetSender("assistant"), "assistant");
+  assert.equal(classifyWidgetSender("human"), "human");
+  assert.equal(classifyWidgetSender("user"), "user");
+  assert.equal(classifyWidgetSender("agent"), null);
+});
+
+test("resolves the host page origin separately from the iframe origin", () => {
+  assert.equal(
+    resolveWidgetParentOrigin(
+      "?assistant_id=assistant&parent_origin=https%3A%2F%2Fcustomer.example",
+      "https://customer.example/widget",
+    ),
+    "https://customer.example",
+  );
+  assert.equal(
+    resolveWidgetParentOrigin("", "http://localhost:3000/demo"),
+    "http://localhost:3000",
+  );
+  assert.equal(resolveWidgetParentOrigin("", ""), "");
+  assert.equal(resolveWidgetParentOrigin("?parent_origin=javascript%3Aalert(1)", ""), "");
+});
 
 test("parses and bounds valid Retry-After seconds", () => {
   assert.equal(parseRetryAfterSeconds("42"), 42);

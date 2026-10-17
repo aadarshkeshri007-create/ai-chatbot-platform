@@ -240,6 +240,7 @@ export async function POST(request: Request) {
         assistant_name: settings.assistantName,
         welcome_message: settings.welcomeMessage,
         response: GROUNDED_ANSWER_FALLBACK,
+        handoff_available: true,
         sources: [],
       }, undefined, assistant.allowed_domains);
     }
@@ -272,6 +273,7 @@ ${settings.customInstructions || "No additional custom instructions were configu
       assistant_name: settings.assistantName,
       welcome_message: settings.welcomeMessage,
       response: responseText,
+      handoff_available: responseText === GROUNDED_ANSWER_FALLBACK,
       sources: Array.from(
         new Map(
           citedChunks.map((chunk) => [chunk.file_name, { label: chunk.file_name }]),
