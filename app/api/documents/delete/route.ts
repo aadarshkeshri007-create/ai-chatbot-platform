@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+function logDeletionFailure(category: string) {
+  console.error(`[documents.delete] ${category}`);
+}
+
 export async function DELETE(request: Request) {
   try {
     const supabase = await createClient();
@@ -36,12 +40,11 @@ export async function DELETE(request: Request) {
       .single();
 
     if (documentError || !document) {
-      console.error("Document lookup error:", documentError);
+      logDeletionFailure("document-lookup-failed");
 
       return NextResponse.json(
         {
           error: "Document not found.",
-          details: documentError?.message,
         },
         { status: 404 },
       );
@@ -55,15 +58,11 @@ export async function DELETE(request: Request) {
       .eq("user_id", user.id);
 
     if (chunksError) {
-      console.error("Error deleting document chunks:", chunksError);
+      logDeletionFailure("chunks-delete-failed");
 
       return NextResponse.json(
         {
           error: "Failed to delete document chunks.",
-          details: chunksError.message,
-          code: chunksError.code,
-          hint: chunksError.hint,
-          detailsFromSupabase: chunksError.details,
         },
         { status: 500 },
       );
@@ -75,12 +74,11 @@ export async function DELETE(request: Request) {
       .remove([document.file_path]);
 
     if (storageError) {
-      console.error("Error deleting storage file:", storageError);
+      logDeletionFailure("storage-delete-failed");
 
       return NextResponse.json(
         {
           error: "Failed to delete document file.",
-          details: storageError.message,
         },
         { status: 500 },
       );
@@ -94,15 +92,11 @@ export async function DELETE(request: Request) {
       .eq("user_id", user.id);
 
     if (deleteError) {
-      console.error("Error deleting document:", deleteError);
+      logDeletionFailure("document-delete-failed");
 
       return NextResponse.json(
         {
           error: "Failed to delete document.",
-          details: deleteError.message,
-          code: deleteError.code,
-          hint: deleteError.hint,
-          detailsFromSupabase: deleteError.details,
         },
         { status: 500 },
       );
@@ -112,13 +106,12 @@ export async function DELETE(request: Request) {
       success: true,
       message: "Document deleted successfully.",
     });
-  } catch (error) {
-    console.error("Delete document error:", error);
+  } catch {
+    logDeletionFailure("unexpected-failure");
 
     return NextResponse.json(
       {
         error: "Something went wrong while deleting the document.",
-        details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
     );

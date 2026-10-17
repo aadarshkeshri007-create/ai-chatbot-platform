@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
@@ -13,10 +13,43 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
+    { media: "(prefers-color-scheme: dark)", color: "#090d16" },
+  ],
+};
+
 export const metadata: Metadata = {
-  title: "AI Customer Support Platform",
+  title: {
+    default: "SupportAI | AI Customer Support",
+    template: "%s | SupportAI",
+  },
   description:
     "Resolve customer questions instantly with an AI assistant trained on your knowledge base.",
+  applicationName: "SupportAI",
+  referrer: "strict-origin-when-cross-origin",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    siteName: "SupportAI",
+    title: "SupportAI | AI Customer Support",
+    description:
+      "Resolve customer questions instantly with an AI assistant trained on your knowledge base.",
+  },
+  twitter: {
+    card: "summary",
+    title: "SupportAI | AI Customer Support",
+    description:
+      "Resolve customer questions instantly with an AI assistant trained on your knowledge base.",
+  },
 };
 
 const themeScript = `

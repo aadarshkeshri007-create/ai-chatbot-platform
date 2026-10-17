@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import ThemeToggle from "@/components/ThemeToggle";
 
 export default function SignupPage() {
+    const router = useRouter();
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -31,40 +33,47 @@ export default function SignupPage() {
         setError("");
         setLoading(true);
 
-        const supabase = createClient();
+        try {
+            const supabase = createClient();
 
-        const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                data: {
-                    full_name: name,
+            const { data, error } = await supabase.auth.signUp({
+                email: email.trim(),
+                password,
+                options: {
+                    data: {
+                        full_name: name.trim(),
+                    },
                 },
-            },
-        });
+            });
 
-        if (error) {
-            setError(error.message);
+            if (error) {
+                setError("Unable to create your account. Please check your details and try again.");
+                setLoading(false);
+                return;
+            }
+
+            /*
+             * If the Supabase project auto-confirms users,
+             * a session is returned immediately — go to chat.
+             * Otherwise show the "check your email" screen.
+             */
+            if (data.session) {
+                router.refresh();
+                router.push("/chat");
+                return;
+            }
+
+            setSuccess(true);
             setLoading(false);
-            return;
+        } catch (err: unknown) {
+            console.error("[Auth Debug] Signup error:", err);
+            setError("An unexpected error occurred during signup. Please try again.");
+            setLoading(false);
         }
-
-        /*
-         * If the Supabase project auto-confirms users,
-         * a session is returned immediately — go to chat.
-         * Otherwise show the "check your email" screen.
-         */
-        if (data.session) {
-            window.location.href = "/chat";
-            return;
-        }
-
-        setSuccess(true);
-        setLoading(false);
     };
 
     const inputStyles =
-        "w-full border border-slate-200 rounded-lg px-4 py-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-150 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400";
+        "w-full min-h-[44px] sm:min-h-[40px] border border-slate-200 rounded-lg px-3.5 py-2.5 text-base sm:text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-150 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400";
 
     return (
         <div className="min-h-screen flex justify-center items-center flex-col gap-6 bg-slate-50 px-4 relative overflow-hidden dark:bg-slate-950 transition-colors duration-150">
@@ -79,7 +88,7 @@ export default function SignupPage() {
                 <div className="absolute -bottom-32 -right-32 w-[28rem] h-[28rem] bg-teal-500/[0.03] rounded-full blur-[100px] dark:bg-teal-500/[0.06]" />
             </div>
 
-            <div className="w-full max-w-[400px] p-7 sm:p-8 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-6 bg-white animate-fade-in-up relative z-10 dark:border-slate-800 dark:bg-slate-900">
+            <div className="w-full max-w-[400px] p-5 sm:p-8 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-6 bg-white animate-fade-in-up relative z-10 dark:border-slate-800 dark:bg-slate-900">
                 {/* Header */}
                 <header className="flex flex-col gap-2.5 items-center text-center">
                     <div className="w-10 h-10 rounded-lg bg-teal-600 flex items-center justify-center mb-1 shadow-sm">
@@ -173,28 +182,32 @@ export default function SignupPage() {
                                     <div className="relative">
                                         <input
                                             id="signup-password"
+                                            name="password"
                                             type={showPassword ? "text" : "password"}
                                             placeholder="Min. 8 characters"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
                                             required
                                             minLength={6}
-                                            className={`${inputStyles} pr-10`}
+                                            autoComplete="new-password"
+                                            className={`${inputStyles} pr-11`}
                                         />
                                         <button
                                             type="button"
-                                            onClick={() => setShowPassword(!showPassword)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+                                            onClick={() => setShowPassword((prev) => !prev)}
+                                            onPointerDown={(e) => e.preventDefault()}
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            className="absolute right-1 top-1/2 -translate-y-1/2 h-10 w-10 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors focus:outline-none"
                                             aria-label={showPassword ? "Hide password" : "Show password"}
                                         >
                                             {showPassword ? (
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <svg className="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
                                                     <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
                                                     <line x1="1" y1="1" x2="23" y2="23" />
                                                 </svg>
                                             ) : (
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <svg className="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                                                     <circle cx="12" cy="12" r="3" />
                                                 </svg>
@@ -243,10 +256,10 @@ export default function SignupPage() {
 
                                 {/* Terms notice */}
                                 <p className="text-[12px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                                    By creating an account, you agree to our{" "}
-                                    <a href="#" className="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 underline underline-offset-2 transition-colors">Terms of Service</a>
-                                    {" "}and{" "}
-                                    <a href="#" className="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 underline underline-offset-2 transition-colors">Privacy Policy</a>.
+                                    By creating an account, you acknowledge that
+                                    account and assistant data are handled by this
+                                    application. Review your organization&apos;s
+                                    policies before adding sensitive information.
                                 </p>
 
                                 {/* Submit */}

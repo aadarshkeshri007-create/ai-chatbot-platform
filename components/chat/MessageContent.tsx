@@ -125,8 +125,8 @@ export default function MessageContent({
         ),
 
         table: ({ children }) => (
-          <div className="my-3 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-            <table className="w-full border-collapse text-sm">
+          <div className="my-3 max-w-full overflow-x-auto scrollbar-thin rounded-lg border border-slate-200 dark:border-slate-800">
+            <table className="w-full min-w-full border-collapse text-sm">
               {children}
             </table>
           </div>
@@ -155,7 +155,7 @@ export default function MessageContent({
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className={linkClass}
+            className={`${linkClass} break-words [overflow-wrap:anywhere]`}
           >
             {children}
           </a>
@@ -167,7 +167,7 @@ export default function MessageContent({
           if (match) {
             const codeString = String(children).replace(/\n$/, "");
             return (
-              <div className="my-3 overflow-hidden rounded-lg border border-slate-700/50 first:mt-0">
+              <div className="my-3 max-w-full overflow-hidden rounded-lg border border-slate-700/50 first:mt-0">
                 {/* Code header */}
                 <div className="flex items-center justify-between bg-[#1e1e2e] px-3 py-1.5">
                   <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
@@ -175,27 +175,29 @@ export default function MessageContent({
                   </span>
                   <CopyButton text={codeString} />
                 </div>
-                <SyntaxHighlighter
-                  language={match[1]}
-                  style={oneDark}
-                  PreTag="div"
-                  customStyle={{
-                    margin: 0,
-                    borderRadius: 0,
-                    padding: "0.875rem 1rem",
-                    fontSize: "0.8125rem",
-                    lineHeight: "1.6",
-                    background: "#282a36",
-                  }}
-                >
-                  {codeString}
-                </SyntaxHighlighter>
+                <div className="overflow-x-auto scrollbar-thin max-w-full">
+                  <SyntaxHighlighter
+                    language={match[1]}
+                    style={oneDark}
+                    PreTag="div"
+                    customStyle={{
+                      margin: 0,
+                      borderRadius: 0,
+                      padding: "0.875rem 1rem",
+                      fontSize: "0.8125rem",
+                      lineHeight: "1.6",
+                      background: "#282a36",
+                    }}
+                  >
+                    {codeString}
+                  </SyntaxHighlighter>
+                </div>
               </div>
             );
           }
 
           return (
-            <code className={inlineCodeClass}>
+            <code className={`${inlineCodeClass} break-words [overflow-wrap:anywhere]`}>
               {children}
             </code>
           );

@@ -3,7 +3,11 @@ import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export async function proxy(request: NextRequest) {
-    const response = NextResponse.next();
+    let response = NextResponse.next({
+        request: {
+            headers: request.headers,
+        },
+    });
     const pathname = request.nextUrl.pathname;
 
     // The public chat route validates its own POST body and authentication
@@ -28,7 +32,11 @@ export async function proxy(request: NextRequest) {
                 },
                 setAll(cookiesToSet) {
                     cookiesToSet.forEach(({ name, value, options }) => {
-                        response.cookies.set(name, value, options);
+                        request.cookies.set(name, value);
+                        response.cookies.set(name, value, {
+                            ...options,
+                            secure: process.env.NODE_ENV === "production",
+                        });
                     });
                 },
             },
@@ -44,19 +52,30 @@ export async function proxy(request: NextRequest) {
         pathname === "/login" ||
         pathname === "/signup";
 
+    const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith("sb-"));
+    if (process.env.NODE_ENV !== "production" && !isPublicPage) {
+        console.log(`[Proxy] ${request.method} ${pathname} | Auth cookie: ${hasAuthCookie} | User: ${!!user}`);
+    }
+
     if (!user && !isPublicPage) {
-        return NextResponse.redirect(
-            new URL("/login", request.url)
-        );
+        const redirectUrl = new URL("/login", request.url);
+        const redirectResponse = NextResponse.redirect(redirectUrl);
+        response.cookies.getAll().forEach((cookie) => {
+            redirectResponse.cookies.set(cookie.name, cookie.value);
+        });
+        return redirectResponse;
     }
 
     if (
         user &&
         (pathname === "/login" || pathname === "/signup")
     ) {
-        return NextResponse.redirect(
-            new URL("/chat", request.url)
-        );
+        const redirectUrl = new URL("/chat", request.url);
+        const redirectResponse = NextResponse.redirect(redirectUrl);
+        response.cookies.getAll().forEach((cookie) => {
+            redirectResponse.cookies.set(cookie.name, cookie.value);
+        });
+        return redirectResponse;
     }
 
     return response;

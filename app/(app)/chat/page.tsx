@@ -10,6 +10,7 @@ import {
 
 import { createClient } from "@/lib/supabase/client";
 import { isMissingSchemaFieldError, logSupabaseError } from "@/lib/supabase/error";
+import { generateClientUuid } from "@/lib/client-uuid";
 import {
     DEFAULT_ASSISTANT_NAME,
     DEFAULT_SUGGESTED_QUESTIONS,
@@ -33,6 +34,7 @@ type ChatSource = {
 export default function ChatPage() {
     const [message, setMessage] = useState("");
     const [loading, setLoading] = useState(false);
+    const [chatError, setChatError] = useState<string | null>(null);
 
     const [conversationId, setConversationId] =
         useState<string | null>(null);
@@ -398,24 +400,37 @@ export default function ChatPage() {
 
         const userMessage = message;
 
-        const assistantMessageId =
-            crypto.randomUUID();
+        let assistantMessageId: string;
+
+        try {
+            const userMessageId = generateClientUuid();
+            assistantMessageId = generateClientUuid();
+
+            setMessages((prevMessages) => [
+                ...prevMessages,
+                {
+                    id: userMessageId,
+                    role: "user",
+                    content: userMessage,
+                },
+                {
+                    id: assistantMessageId,
+                    role: "assistant",
+                    content: "",
+                },
+            ]);
+        } catch (error) {
+            console.error("Unable to create chat message identifiers:", error);
+            setChatError(
+                error instanceof Error
+                    ? error.message
+                    : "Unable to start the chat. Please use a supported browser.",
+            );
+            return;
+        }
 
         shouldAutoScrollRef.current = true;
-
-        setMessages((prevMessages) => [
-            ...prevMessages,
-            {
-                id: crypto.randomUUID(),
-                role: "user",
-                content: userMessage,
-            },
-            {
-                id: assistantMessageId,
-                role: "assistant",
-                content: "",
-            },
-        ]);
+        setChatError(null);
 
         setLoading(true);
         setMessage("");
@@ -706,19 +721,19 @@ export default function ChatPage() {
             />
 
             {sources.length > 0 && (
-                <div className="border-t border-slate-200 bg-white px-6 py-3 dark:border-slate-800 dark:bg-slate-900 transition-colors duration-150">
+                <div className="shrink-0 border-t border-slate-200 bg-white px-3 py-2.5 sm:px-6 sm:py-3 dark:border-slate-800 dark:bg-slate-900 transition-colors duration-150">
                     <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                         Sources
                     </p>
 
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="mt-2 flex gap-1.5 overflow-x-auto scrollbar-thin pb-0.5 sm:gap-2">
                         {sources.map(
                             (source) => (
                                 <span
                                     key={
                                         source.documentId
                                     }
-                                    className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:border dark:border-slate-700/50"
+                                    className="whitespace-nowrap rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:border dark:border-slate-700/50"
                                 >
                                     📄{" "}
                                     {
@@ -729,6 +744,15 @@ export default function ChatPage() {
                         )}
                     </div>
                 </div>
+            )}
+
+            {chatError && (
+                <p
+                    role="alert"
+                    className="shrink-0 border-t border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+                >
+                    {chatError}
+                </p>
             )}
 
             <ChatInput

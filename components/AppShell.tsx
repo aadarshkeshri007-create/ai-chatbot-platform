@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Sidebar from "@/components/chat/Sidebar";
 import ChatHeader from "@/components/chat/ChatHeader";
 import { useSidebarContext } from "@/components/SidebarContext";
@@ -22,8 +23,32 @@ export default function AppShell({
         onDeleteConversation,
     } = useSidebarContext();
 
+    useEffect(() => {
+        const viewport = window.visualViewport;
+
+        const updateViewportHeight = () => {
+            const height = viewport?.height ?? window.innerHeight;
+            document.documentElement.style.setProperty(
+                "--app-viewport-height",
+                `${Math.round(height)}px`,
+            );
+        };
+
+        updateViewportHeight();
+        window.addEventListener("resize", updateViewportHeight);
+        viewport?.addEventListener("resize", updateViewportHeight);
+        viewport?.addEventListener("scroll", updateViewportHeight);
+
+        return () => {
+            window.removeEventListener("resize", updateViewportHeight);
+            viewport?.removeEventListener("resize", updateViewportHeight);
+            viewport?.removeEventListener("scroll", updateViewportHeight);
+            document.documentElement.style.removeProperty("--app-viewport-height");
+        };
+    }, []);
+
     return (
-        <div className="flex h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="app-viewport flex w-full max-w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
             <Sidebar
                 conversations={conversations}
                 activeConversationId={
@@ -42,7 +67,7 @@ export default function AppShell({
                 onToggleCollapsed={toggleCollapsed}
             />
 
-            <main className="flex min-h-0 min-w-0 flex-1 flex-col transition-all duration-300">
+            <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-all duration-300">
                 <ChatHeader
                     onToggleSidebar={
                         toggleSidebar

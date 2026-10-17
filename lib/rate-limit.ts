@@ -34,26 +34,13 @@ function normalizeIp(ip: string): string {
 }
 
 /**
- * Extracts and normalizes the client IP address from request headers.
- * Prioritizes trusted edge headers (Vercel) before falling back.
+ * Extracts and normalizes the client IP address from Vercel's trusted header.
  */
 export function getClientIp(request: Request): string {
-  // On Vercel, x-vercel-forwarded-for is populated and sanitized by the edge network
+  // Vercel populates and sanitizes this header at the edge.
   const vercelForwardedFor = request.headers.get("x-vercel-forwarded-for");
   if (vercelForwardedFor) {
     const first = vercelForwardedFor.split(",")[0]?.trim();
-    if (first) return normalizeIp(first);
-  }
-
-  const realIp = request.headers.get("x-real-ip");
-  if (realIp) {
-    const trimmed = realIp.trim();
-    if (trimmed) return normalizeIp(trimmed);
-  }
-
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor) {
-    const first = forwardedFor.split(",")[0]?.trim();
     if (first) return normalizeIp(first);
   }
 
@@ -98,6 +85,7 @@ function getPublicChatLimiter(): Ratelimit | null {
 export async function checkPublicChatRateLimit(
   request: Request,
   assistantId: string,
+  correlationId?: string,
 ): Promise<RateLimitResult> {
   const limiter = getPublicChatLimiter();
   if (!limiter) {
@@ -120,7 +108,12 @@ export async function checkPublicChatRateLimit(
 
     return { status: "rate_limited", retryAfter };
   } catch {
-    console.error("Public chat rate limit check failed.");
+    console.error("[public-chat]", {
+      stage: "rate-limit",
+      category: "backend-failure",
+      code: "RATE_LIMIT_CHECK_FAILED",
+      correlationId: correlationId ?? "unknown",
+    });
     return { status: "service_unavailable" };
   }
 }

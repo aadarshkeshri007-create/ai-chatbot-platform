@@ -15,6 +15,7 @@ export default function ProfilePage() {
     const [user, setUser] = useState<UserInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const [loggingOut, setLoggingOut] = useState(false);
+    const [logoutError, setLogoutError] = useState("");
 
     useEffect(() => {
         const loadUser = async () => {
@@ -38,6 +39,7 @@ export default function ProfilePage() {
     }, []);
 
     const handleLogout = async () => {
+        setLogoutError("");
         setLoggingOut(true);
 
         try {
@@ -46,7 +48,7 @@ export default function ProfilePage() {
 
             if (error) {
                 console.error("Logout error:", error);
-                window.alert("Failed to log out. Please try again.");
+                setLogoutError("Failed to log out. Please try again.");
                 setLoggingOut(false);
                 return;
             }
@@ -54,7 +56,7 @@ export default function ProfilePage() {
             router.push("/");
         } catch (error) {
             console.error("Logout error:", error);
-            window.alert("Failed to log out. Please try again.");
+            setLogoutError("Failed to log out. Please try again.");
             setLoggingOut(false);
         }
     };
@@ -89,7 +91,7 @@ export default function ProfilePage() {
     }
 
     return (
-        <div className="flex-1 overflow-y-auto bg-slate-50 px-4 py-10 sm:px-6 dark:bg-slate-950 transition-colors duration-150">
+        <div className="app-scroll flex-1 bg-slate-50 px-4 py-6 pb-[max(1.5rem,calc(1.5rem+env(safe-area-inset-bottom,0px)))] sm:px-6 sm:py-8 lg:py-10 dark:bg-slate-950 transition-colors duration-150">
             <div className="mx-auto max-w-2xl">
                 {/* ── Page heading ─────────────────── */}
                 <header className="mb-6">
@@ -102,26 +104,26 @@ export default function ProfilePage() {
                 </header>
 
                 {/* ── Profile card ─────────────────── */}
-                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-slate-800 dark:bg-slate-900">
+                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8 dark:border-slate-800 dark:bg-slate-900">
                     <div className="flex flex-col items-center sm:flex-row sm:items-start sm:gap-6">
                         {/* Avatar */}
                         <div
-                            className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 to-teal-700 shadow-md"
+                            className="flex h-16 w-16 sm:h-20 sm:w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 to-teal-700 shadow-md"
                             aria-hidden="true"
                         >
-                            <span className="text-2xl font-bold text-white">
+                            <span className="text-xl sm:text-2xl font-bold text-white">
                                 {user ? getInitials(user.email) : "U"}
                             </span>
                         </div>
 
                         {/* Info */}
-                        <div className="mt-4 flex-1 text-center sm:mt-0 sm:text-left">
-                            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        <div className="mt-4 flex-1 text-center min-w-0 sm:mt-0 sm:text-left">
+                            <h2 className="text-lg font-semibold text-slate-900 truncate dark:text-slate-100">
                                 {user?.email
                                     ? user.email.split("@")[0]
                                     : "User"}
                             </h2>
-                            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                            <p className="mt-0.5 text-sm text-slate-500 truncate dark:text-slate-400">
                                 {user?.email ?? "No email available"}
                             </p>
 
@@ -141,29 +143,29 @@ export default function ProfilePage() {
 
                 {/* ── Account details ──────────────── */}
                 <section className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                    <div className="border-b border-slate-100 px-6 py-4 sm:px-8 dark:border-slate-800">
+                    <div className="border-b border-slate-100 px-5 py-3.5 sm:px-6 sm:py-4 dark:border-slate-800">
                         <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                             Account Information
                         </h3>
                     </div>
 
                     <dl className="divide-y divide-slate-100 dark:divide-slate-800">
-                        <div className="flex items-center justify-between px-6 py-3.5 sm:px-8">
-                            <dt className="text-sm text-slate-500 dark:text-slate-400">Email</dt>
-                            <dd className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-5 py-3 sm:px-6 sm:py-3.5 gap-0.5 sm:gap-4">
+                            <dt className="text-xs sm:text-sm text-slate-500 shrink-0 dark:text-slate-400">Email</dt>
+                            <dd className="text-sm font-medium text-slate-900 truncate max-w-full dark:text-slate-100">
                                 {user?.email ?? "—"}
                             </dd>
                         </div>
 
-                        <div className="flex items-center justify-between px-6 py-3.5 sm:px-8">
-                            <dt className="text-sm text-slate-500 dark:text-slate-400">Status</dt>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-5 py-3 sm:px-6 sm:py-3.5 gap-0.5 sm:gap-4">
+                            <dt className="text-xs sm:text-sm text-slate-500 shrink-0 dark:text-slate-400">Status</dt>
                             <dd className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
                                 Active
                             </dd>
                         </div>
 
-                        <div className="flex items-center justify-between px-6 py-3.5 sm:px-8">
-                            <dt className="text-sm text-slate-500 dark:text-slate-400">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-5 py-3 sm:px-6 sm:py-3.5 gap-0.5 sm:gap-4">
+                            <dt className="text-xs sm:text-sm text-slate-500 shrink-0 dark:text-slate-400">
                                 Member since
                             </dt>
                             <dd className="text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -173,8 +175,8 @@ export default function ProfilePage() {
                             </dd>
                         </div>
 
-                        <div className="flex items-center justify-between px-6 py-3.5 sm:px-8">
-                            <dt className="text-sm text-slate-500 dark:text-slate-400">Plan</dt>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-5 py-3 sm:px-6 sm:py-3.5 gap-0.5 sm:gap-4">
+                            <dt className="text-xs sm:text-sm text-slate-500 shrink-0 dark:text-slate-400">Plan</dt>
                             <dd className="text-sm font-medium text-slate-900 dark:text-slate-100">
                                 Free
                             </dd>
@@ -184,7 +186,7 @@ export default function ProfilePage() {
 
                 {/* ── Quick links ──────────────────── */}
                 <section className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                    <div className="border-b border-slate-100 px-6 py-4 sm:px-8 dark:border-slate-800">
+                    <div className="border-b border-slate-100 px-5 py-3.5 sm:px-6 sm:py-4 dark:border-slate-800">
                         <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                             Quick Links
                         </h3>
@@ -193,7 +195,7 @@ export default function ProfilePage() {
                     <div className="divide-y divide-slate-100 dark:divide-slate-800">
                         <Link
                             href="/settings"
-                            className="flex items-center justify-between px-6 py-3.5 text-sm text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100 sm:px-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
+                            className="flex min-h-[44px] items-center justify-between px-5 py-3 text-sm text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100 sm:px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
                         >
                             <span className="flex items-center gap-2.5">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-slate-400 dark:text-slate-500">
@@ -209,7 +211,7 @@ export default function ProfilePage() {
 
                         <Link
                             href="/upload"
-                            className="flex items-center justify-between px-6 py-3.5 text-sm text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100 sm:px-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
+                            className="flex min-h-[44px] items-center justify-between px-5 py-3 text-sm text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100 sm:px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
                         >
                             <span className="flex items-center gap-2.5">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-slate-400 dark:text-slate-500">
@@ -227,11 +229,16 @@ export default function ProfilePage() {
 
                 {/* ── Logout ──────────────────────── */}
                 <section className="mt-6 mb-10">
+                    {logoutError && (
+                        <p role="alert" aria-live="assertive" className="mb-3 text-center text-sm text-red-600 dark:text-red-400">
+                            {logoutError}
+                        </p>
+                    )}
                     <button
                         type="button"
                         onClick={handleLogout}
                         disabled={loggingOut}
-                        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-600 shadow-sm transition-all duration-150 hover:border-red-300 hover:bg-red-50 dark:border-red-900/50 dark:bg-slate-900 dark:text-red-400 dark:hover:border-red-800 dark:hover:bg-red-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-600 shadow-sm transition-all duration-150 hover:border-red-300 hover:bg-red-50 dark:border-red-900/50 dark:bg-slate-900 dark:text-red-400 dark:hover:border-red-800 dark:hover:bg-red-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                         aria-label="Log out of your account"
                     >
                         {loggingOut ? (

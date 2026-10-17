@@ -5,6 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
+function logSearchFailure(category: string) {
+    console.error(`[documents.search] ${category}`);
+}
+
 export async function POST(request: Request) {
     try {
         const supabase = await createClient();
@@ -78,10 +82,7 @@ export async function POST(request: Request) {
             );
 
         if (searchError) {
-            console.error(
-                "Vector search error:",
-                searchError,
-            );
+            logSearchFailure("vector-search-failed");
 
             return NextResponse.json(
                 {
@@ -108,18 +109,12 @@ export async function POST(request: Request) {
             query,
             results: filteredChunks ?? [],
         });
-    } catch (error) {
-        console.error(
-            "Error searching documents:",
-            error,
-        );
+    } catch {
+        logSearchFailure("search-failed");
 
         return NextResponse.json(
             {
-                error:
-                    error instanceof Error
-                        ? error.message
-                        : "Unknown error",
+                error: "Unable to search documents right now. Please try again.",
             },
             { status: 500 },
         );

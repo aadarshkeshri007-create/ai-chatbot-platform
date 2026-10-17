@@ -3,11 +3,15 @@
 
 @variant dark (&:where(.dark, .dark *));
 
-/* ── Global Theme Colors & Scrollbars ──────────────────── */
+/* ── Global Theme Colors & Tokens ──────────────────────── */
 
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
 }
 
 .dark {
@@ -15,10 +19,55 @@
   --foreground: #f1f5f9;
 }
 
+/* ── Viewport & Base Resets ────────────────────────────── */
+
+html {
+  /* Prevent horizontal scrollbars from rogue floating elements */
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+  height: 100%;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  min-height: 100%;
+  min-height: 100dvh;
+  overflow-x: clip;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * Authenticated routes live inside a fixed shell. Each route then opts into
+ * .app-scroll, so scrolling never bubbles to the document behind the shell.
+ * `--app-viewport-height` is set from VisualViewport when it is available;
+ * this keeps the shell above the Android/iOS software keyboard while `dvh`
+ * remains the standards-based fallback.
+ */
+.app-viewport {
+  height: 100svh;
+  height: 100dvh;
+  height: var(--app-viewport-height, 100dvh);
+}
+
+.app-scroll {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Interactive & Touch Resets ────────────────────────── */
+
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
 }
 
 /* ── Shared Animations ─────────────────────────────────── */
@@ -26,7 +75,7 @@ body {
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(20px) scale(0.98);
+    transform: translateY(16px) scale(0.99);
   }
   to {
     opacity: 1;
@@ -53,19 +102,79 @@ body {
   }
 }
 
+@keyframes loading {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+@keyframes uploading {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
 .animate-fade-in-up {
-  animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-spin-slow {
   animation: spin 0.8s linear infinite;
 }
 
-/* ── Scrollbar ─────────────────────────────────────────── */
+/* ── Accessibility: Reduced Motion ─────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Safe Area Utility Classes ─────────────────────────── */
+
+.pt-safe {
+  padding-top: max(1rem, var(--sat));
+}
+
+.pb-safe {
+  padding-bottom: max(1rem, var(--sab));
+}
+
+.pl-safe {
+  padding-left: max(1rem, var(--sal));
+}
+
+.pr-safe {
+  padding-right: max(1rem, var(--sar));
+}
+
+/* ── Scrollbars ────────────────────────────────────────── */
 
 .scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dark .scrollbar-thin {
@@ -74,6 +183,7 @@ body {
 
 .scrollbar-thin::-webkit-scrollbar {
   width: 5px;
+  height: 5px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-track {
@@ -95,36 +205,4 @@ body {
 
 .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background-color: #475569;
-}
-
-
-@keyframes loading {
-  0% {
-    transform: translateX(-100%);
-  }
-
-  100% {
-    transform: translateX(300%);
-  }
-}
-
-@keyframes uploading {
-  0% {
-    transform: translateX(-100%);
-  }
-
-  100% {
-    transform: translateX(300%);
-  }
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-5px);
-  }
 }

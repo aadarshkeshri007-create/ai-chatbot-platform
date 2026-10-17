@@ -33,8 +33,8 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
       <div
         className={
           isUser
-            ? "max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-teal-600 px-4 py-2.5 text-[14px] leading-relaxed text-white shadow-sm sm:max-w-lg"
-            : "max-w-[80%] min-w-0 whitespace-pre-wrap rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-2.5 text-[14px] leading-relaxed text-slate-800 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 sm:max-w-2xl"
+            ? "max-w-[88%] sm:max-w-lg min-w-0 break-words [overflow-wrap:anywhere] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-teal-600 px-3.5 py-2.5 sm:px-4 text-[14px] leading-relaxed text-white shadow-sm"
+            : "max-w-[88%] sm:max-w-2xl min-w-0 break-words [overflow-wrap:anywhere] whitespace-pre-wrap rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-3.5 py-2.5 sm:px-4 text-[14px] leading-relaxed text-slate-800 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
         }
       >
         <MessageContent content={message.content} isUser={isUser} />

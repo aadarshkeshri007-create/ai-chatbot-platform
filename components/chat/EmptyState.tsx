@@ -62,7 +62,7 @@ export default function EmptyState({
                 key={`${index}-${suggestion}`}
                 type="button"
                 onClick={() => onSuggestionClick(suggestion)}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-left text-sm text-slate-600 shadow-sm transition-all duration-150 hover:border-teal-200 hover:bg-teal-50/50 hover:text-teal-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-teal-600/50 dark:hover:bg-teal-950/30 dark:hover:text-teal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+                className="min-h-[44px] rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-left text-sm text-slate-600 shadow-sm transition-all duration-150 hover:border-teal-200 hover:bg-teal-50/50 hover:text-teal-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-teal-600/50 dark:hover:bg-teal-950/30 dark:hover:text-teal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
               >
                 {suggestion}
               </button>

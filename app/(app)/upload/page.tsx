@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { generateClientUuid } from "@/lib/client-uuid";
 
 type Document = {
   id: string;
@@ -118,7 +119,7 @@ export default function UploadPage() {
           );
         }
 
-        const fileId = crypto.randomUUID();
+        const fileId = generateClientUuid();
 
         const filePath = `${user.id}/${fileId}-${file.name}`;
 
@@ -181,9 +182,12 @@ export default function UploadPage() {
       );
 
       setError(
-        error instanceof Error
+        error instanceof Error &&
+          /not a supported file type|larger than the 20 MB limit|logged in to upload/i.test(
+            error.message,
+          )
           ? error.message
-          : "Something went wrong while uploading.",
+          : "Something went wrong while uploading. Please try again.",
       );
     } finally {
       setUploading(false);
@@ -291,9 +295,7 @@ export default function UploadPage() {
       );
 
       setError(
-        error instanceof Error
-          ? error.message
-          : "Something went wrong while processing.",
+        "Document processing failed. Please try again.",
       );
     } finally {
       setProcessingId(null);
@@ -357,9 +359,7 @@ export default function UploadPage() {
       );
 
       setError(
-        error instanceof Error
-          ? error.message
-          : "Something went wrong while deleting the document.",
+        "Document deletion failed. Please try again.",
       );
     } finally {
       setDeletingId(null);
@@ -367,10 +367,10 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50 px-6 py-10 transition-colors duration-150 dark:bg-slate-950">
+    <div className="app-scroll flex-1 bg-slate-50 px-4 py-6 pb-[max(1.5rem,calc(1.5rem+env(safe-area-inset-bottom,0px)))] sm:px-6 sm:py-8 lg:px-8 lg:py-10 transition-colors duration-150 dark:bg-slate-950">
       <div className="mx-auto max-w-5xl">
         <header className="mb-6">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             Knowledge Base
           </h1>
 
@@ -381,9 +381,9 @@ export default function UploadPage() {
           </p>
         </header>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-8">
+        <section className="rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-4 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div
-            className={`group relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed px-6 py-12 text-center transition-all duration-300 ${uploading
+            className={`group relative flex flex-col items-center justify-center overflow-hidden rounded-xl sm:rounded-2xl border-2 border-dashed px-4 py-8 sm:px-6 sm:py-12 text-center transition-all duration-300 ${uploading
                 ? "border-teal-400 bg-teal-50/50 dark:border-teal-500/60 dark:bg-teal-950/20"
                 : "border-slate-200 bg-slate-50/50 hover:border-teal-300 hover:bg-teal-50/30 dark:border-slate-700/70 dark:bg-slate-900/40 dark:hover:border-teal-700 dark:hover:bg-teal-950/10"
               }`}
@@ -551,19 +551,19 @@ export default function UploadPage() {
             </p>
           </div>
           {error && (
-            <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+            <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
               {error}
             </p>
           )}
 
           {success && (
-            <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+            <p role="status" aria-live="polite" className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
               {success}
             </p>
           )}
 
           {processResult && (
-            <p className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300">
+            <p role="status" aria-live="polite" className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300">
               {processResult}
             </p>
           )}
@@ -584,9 +584,9 @@ export default function UploadPage() {
                 (document) => (
                   <div
                     key={document.id}
-                    className="border-b border-slate-100 px-5 py-4 last:border-b-0 dark:border-slate-800"
+                    className="border-b border-slate-100 px-4 py-3.5 sm:px-5 sm:py-4 last:border-b-0 dark:border-slate-800"
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                       <div className="flex min-w-0 flex-1 items-start gap-3">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm dark:bg-slate-800">
                           📄
@@ -631,7 +631,7 @@ export default function UploadPage() {
                         </div>
                       </div>
 
-                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
+                      <div className="flex shrink-0 flex-wrap items-center justify-start sm:justify-end gap-2 sm:gap-3 pt-1 sm:pt-0">
                         {document.status ===
                           "processing" ? (
                           <div className="flex items-center gap-2 rounded-full bg-teal-50 px-2.5 py-1 dark:bg-teal-950/40">
@@ -677,7 +677,7 @@ export default function UploadPage() {
                             document.status ===
                             "processing"
                           }
-                          className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                          className="min-h-[44px] sm:min-h-0 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                         >
                           {processingId ===
                             document.id
@@ -704,7 +704,7 @@ export default function UploadPage() {
                             deletingId ===
                             document.id
                           }
-                          className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                          className="min-h-[44px] sm:min-h-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
                         >
                           {deletingId ===
                             document.id
@@ -723,4 +723,3 @@ export default function UploadPage() {
     </div>
   );
 }
-

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
@@ -106,6 +107,17 @@ export default function Sidebar({
     const pathname = usePathname();
     const isOnChatPage = pathname === "/chat";
     const { resolvedTheme, toggleTheme } = useTheme();
+    const sidebarRef = useRef<HTMLElement>(null);
+
+    /* Close on Escape key */
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") onClose();
+        };
+        document.addEventListener("keydown", handleKeyDown);
+        return () => document.removeEventListener("keydown", handleKeyDown);
+    }, [isOpen, onClose]);
 
     const handleDelete = (
         event: React.MouseEvent<HTMLButtonElement>,
@@ -139,24 +151,28 @@ export default function Sidebar({
             {/* Mobile overlay */}
             {isOpen && (
                 <div
-                    className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm lg:hidden dark:bg-black/60"
+                    className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm lg:hidden dark:bg-black/60"
                     onClick={onClose}
                     aria-hidden="true"
                 />
             )}
 
             <aside
-                className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200 bg-white transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-slate-900 lg:relative lg:z-auto lg:translate-x-0 ${
-                    isOpen ? "translate-x-0" : "-translate-x-full"
+                ref={sidebarRef}
+                role={isOpen ? "dialog" : undefined}
+                aria-modal={isOpen ? "true" : undefined}
+                aria-label="Navigation"
+                className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200 bg-white transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-slate-900 lg:relative lg:z-auto lg:translate-x-0 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] ${
+                    isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
                 } ${
-                    collapsed ? "w-72 lg:w-16" : "w-72"
+                    collapsed ? "w-72 max-w-[calc(100vw-3rem)] lg:max-w-none lg:w-16" : "w-72 max-w-[calc(100vw-3rem)] lg:max-w-none"
                 }`}
             >
                 {/* ── Header: Brand & Collapse Toggle ──────────────── */}
                 <div className={`flex items-center justify-between pt-4 pb-2 ${collapsed ? "px-3 lg:px-2 lg:justify-center" : "px-4"}`}>
                     {/* Brand */}
                     <Link
-                        href="/"
+                        href="/chat"
                         className={`flex items-center group/brand ${collapsed ? "gap-0 lg:justify-center" : "gap-2.5"}`}
                         onClick={onClose}
                         title={collapsed ? "SupportAI — Go to home" : undefined}
@@ -190,14 +206,14 @@ export default function Sidebar({
                         </svg>
                     </button>
 
-                    {/* Mobile close button */}
+                    {/* Mobile close button — 44px min touch target */}
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 lg:hidden"
+                        className="flex h-10 w-10 min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                         aria-label="Close sidebar"
                     >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <line x1="18" y1="6" x2="6" y2="18" />
                             <line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
@@ -318,7 +334,7 @@ export default function Sidebar({
                 {/* ── Conversations list (only on /chat, hidden when collapsed on desktop) ── */}
                 {isOnChatPage && (
                     <nav
-                        className={`flex-1 overflow-y-auto scrollbar-thin px-3 pt-2 pb-2 ${
+                        className={`min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-thin px-3 pt-2 pb-2 ${
                             collapsed ? "lg:hidden" : ""
                         }`}
                         aria-label="Conversations"
@@ -369,7 +385,7 @@ export default function Sidebar({
                                                     handleDelete(event, conversation.id)
                                                 }
                                                 aria-label={`Delete ${conversation.title}`}
-                                                className="mr-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-all duration-100 hover:bg-red-50 hover:text-red-500 dark:text-slate-500 dark:hover:bg-red-950/40 dark:hover:text-red-400 group-hover:opacity-100 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                                                className="mr-1.5 flex h-7 w-7 min-h-[44px] min-w-[44px] sm:h-6 sm:w-6 sm:min-h-0 sm:min-w-0 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-100 sm:opacity-0 transition-all duration-100 hover:bg-red-50 hover:text-red-500 dark:text-slate-500 dark:hover:bg-red-950/40 dark:hover:text-red-400 group-hover:opacity-100 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                                             >
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                                     <line x1="18" y1="6" x2="6" y2="18" />

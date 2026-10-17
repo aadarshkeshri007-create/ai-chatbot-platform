@@ -1,6 +1,6 @@
 export default function HistoryPage() {
     return (
-        <div className="min-h-0 flex flex-1 flex-col items-center justify-center bg-slate-50 px-6 dark:bg-slate-950 transition-colors duration-150">
+        <div className="app-scroll flex flex-1 flex-col items-center justify-center bg-slate-50 px-4 py-10 sm:px-6 dark:bg-slate-950 transition-colors duration-150">
             <div className="flex max-w-md flex-col items-center text-center">
                 {/* Icon */}
                 <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-teal-50 dark:bg-teal-950/40">

@@ -14,6 +14,10 @@ const MAX_CHUNKS = 2000;
 const EMBEDDING_MODEL = "gemini-embedding-001";
 const EMBEDDING_DIMENSIONS = 768;
 
+function logProcessingFailure(category: string) {
+  console.error(`[documents.process] ${category}`);
+}
+
 function createChunks(text: string) {
   const chunks: string[] = [];
 
@@ -109,10 +113,7 @@ export async function POST(request: Request) {
       .eq("user_id", user.id);
 
     if (processingStatusError) {
-      console.error(
-        "Error updating document status to processing:",
-        processingStatusError,
-      );
+      logProcessingFailure("processing-status-update-failed");
 
       return NextResponse.json(
         {
@@ -127,7 +128,7 @@ export async function POST(request: Request) {
       .download(document.file_path);
 
     if (downloadError || !file) {
-      console.error("Error downloading document:", downloadError);
+      logProcessingFailure("storage-download-failed");
 
       throw new Error("Unable to download document.");
     }
@@ -232,7 +233,7 @@ export async function POST(request: Request) {
       .eq("user_id", user.id);
 
     if (deleteChunksError) {
-      console.error("Error deleting existing chunks:", deleteChunksError);
+      logProcessingFailure("existing-chunks-delete-failed");
 
       throw new Error("Unable to reset existing document chunks.");
     }
@@ -242,7 +243,7 @@ export async function POST(request: Request) {
       .insert(chunkRows);
 
     if (insertChunksError) {
-      console.error("Error inserting chunks:", insertChunksError);
+      logProcessingFailure("chunk-insert-failed");
 
       throw new Error("Unable to save document chunks.");
     }
@@ -256,7 +257,7 @@ export async function POST(request: Request) {
       .eq("user_id", user.id);
 
     if (updateDocumentError) {
-      console.error("Error updating document status:", updateDocumentError);
+      logProcessingFailure("processed-status-update-failed");
 
       throw new Error(
         "Chunks were created, but document status could not be updated.",
@@ -275,8 +276,8 @@ export async function POST(request: Request) {
       chunkCount: chunks.length,
       embeddingDimensions: EMBEDDING_DIMENSIONS,
     });
-  } catch (error) {
-    console.error("Error processing document:", error);
+  } catch {
+    logProcessingFailure("processing-failed");
 
     /*
      * If anything fails after we marked the
@@ -292,16 +293,13 @@ export async function POST(request: Request) {
         .eq("user_id", userId);
 
       if (failedStatusError) {
-        console.error(
-          "Error updating document status to failed:",
-          failedStatusError,
-        );
+        logProcessingFailure("failed-status-update-failed");
       }
     }
 
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Unable to process the document right now. Please try again.",
       },
       { status: 500 },
     );

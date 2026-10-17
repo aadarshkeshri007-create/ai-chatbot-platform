@@ -96,6 +96,17 @@ export function SidebarProvider({
         }
     }, []);
 
+    /* Lock body scroll when the mobile drawer is open */
+    useEffect(() => {
+        if (sidebarOpen) {
+            const original = document.body.style.overflow;
+            document.body.style.overflow = "hidden";
+            return () => {
+                document.body.style.overflow = original;
+            };
+        }
+    }, [sidebarOpen]);
+
     const [conversations, setConversations] =
         useState<Conversation[]>([]);
 

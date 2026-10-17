@@ -14,6 +14,7 @@ import {
     getAssistantSettings,
     parseSuggestedQuestions,
 } from "@/lib/assistant-settings";
+import { normalizeAllowedDomainInput } from "@/lib/public-chat-origin";
 
 /* ── Types ─────────────────────────────────────── */
 
@@ -39,6 +40,10 @@ export default function SettingsPage() {
     const [customInstructions, setCustomInstructions] = useState("");
     const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
     const [suggestedQuestionsAvailable, setSuggestedQuestionsAvailable] = useState(true);
+    const [allowedDomains, setAllowedDomains] = useState<string[]>([]);
+    const [newAllowedDomain, setNewAllowedDomain] = useState("");
+    const [allowedDomainsAvailable, setAllowedDomainsAvailable] = useState(true);
+    const [allowedDomainsError, setAllowedDomainsError] = useState("");
     const [assistantId, setAssistantId] = useState<string | null>(null);
     const [assistantIdError, setAssistantIdError] = useState("");
     const [assistantIdCopyStatus, setAssistantIdCopyStatus] = useState("");
@@ -61,7 +66,7 @@ export default function SettingsPage() {
 
             let { data, error } = await supabase
                 .from("profiles")
-                .select("business_name, assistant_name, welcome_message, custom_instructions, suggested_questions")
+                .select("business_name, assistant_name, welcome_message, custom_instructions, suggested_questions, allowed_domains")
                 .eq("id", user.id)
                 .maybeSingle();
 
@@ -75,9 +80,18 @@ export default function SettingsPage() {
                 setSuggestedQuestionsAvailable(false);
                 ({ data, error } = await supabase
                     .from("profiles")
-                    .select("business_name, assistant_name, welcome_message, custom_instructions")
+                    .select("business_name, assistant_name, welcome_message, custom_instructions, allowed_domains")
                     .eq("id", user.id)
                     .maybeSingle());
+            }
+
+            if (isMissingSchemaFieldError(error)) {
+            setAllowedDomainsAvailable(false);
+            ({ data, error } = await supabase
+                .from("profiles")
+                .select("business_name, assistant_name, welcome_message, custom_instructions")
+                .eq("id", user.id)
+                .maybeSingle());
             }
 
             if (error) {
@@ -90,6 +104,13 @@ export default function SettingsPage() {
                 setWelcomeMessage(settings.welcomeMessage);
                 setCustomInstructions(settings.customInstructions);
                 setSuggestedQuestions(parseSuggestedQuestions(data?.suggested_questions));
+                setAllowedDomains(
+                    Array.isArray(data?.allowed_domains)
+                        ? data.allowed_domains.filter(
+                            (domain): domain is string => typeof domain === "string",
+                        )
+                        : [],
+                );
             }
 
             const { data: profile, error: assistantIdLoadError } = await supabase
@@ -154,10 +175,31 @@ export default function SettingsPage() {
         );
     };
 
+    const handleAddAllowedDomain = () => {
+        setAllowedDomainsError("");
+        const normalized = normalizeAllowedDomainInput(newAllowedDomain);
+
+        if (!normalized) {
+            setAllowedDomainsError(
+                "Enter a hostname only, such as support.example.com. Schemes, paths, ports, credentials, and wildcards are not allowed.",
+            );
+            return;
+        }
+
+        if (allowedDomains.includes(normalized)) {
+            setAllowedDomainsError("That hostname has already been added.");
+            return;
+        }
+
+        setAllowedDomains((current) => [...current, normalized]);
+        setNewAllowedDomain("");
+    };
+
     const handleAssistantSettingsSave = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setIdentityError("");
         setIdentitySuccess("");
+        setAllowedDomainsError("");
 
         const nextBusinessName = businessName.trim();
         const nextAssistantName = assistantName.trim();
@@ -166,6 +208,14 @@ export default function SettingsPage() {
         const nextSuggestedQuestions = suggestedQuestions
             .map((question) => question.trim())
             .filter((question) => question.length > 0);
+        const nextAllowedDomains = allowedDomains.map(normalizeAllowedDomainInput);
+
+        if (nextAllowedDomains.some((domain): domain is null => domain === null)) {
+            setAllowedDomainsError("Remove or correct invalid allowed domains before saving.");
+            return;
+        }
+
+        const normalizedAllowedDomains = [...new Set(nextAllowedDomains)] as string[];
 
         if (!nextBusinessName || !nextAssistantName || !nextWelcomeMessage) {
             setIdentityError("All assistant identity fields are required.");
@@ -212,12 +262,19 @@ export default function SettingsPage() {
                 ...(suggestedQuestionsAvailable
                     ? { suggested_questions: nextSuggestedQuestions }
                     : {}),
+                ...(allowedDomainsAvailable
+                    ? { allowed_domains: normalizedAllowedDomains }
+                    : {}),
             })
             .eq("id", user.id)
             .select(
-                suggestedQuestionsAvailable
-                    ? "business_name, assistant_name, welcome_message, custom_instructions, suggested_questions"
-                    : "business_name, assistant_name, welcome_message, custom_instructions",
+                suggestedQuestionsAvailable && allowedDomainsAvailable
+                    ? "business_name, assistant_name, welcome_message, custom_instructions, suggested_questions, allowed_domains"
+                    : suggestedQuestionsAvailable
+                        ? "business_name, assistant_name, welcome_message, custom_instructions, suggested_questions"
+                        : allowedDomainsAvailable
+                            ? "business_name, assistant_name, welcome_message, custom_instructions, allowed_domains"
+                            : "business_name, assistant_name, welcome_message, custom_instructions",
             )
             .maybeSingle();
 
@@ -235,6 +292,7 @@ export default function SettingsPage() {
             setWelcomeMessage(nextWelcomeMessage);
             setCustomInstructions(nextCustomInstructions);
             setSuggestedQuestions(nextSuggestedQuestions);
+            setAllowedDomains(normalizedAllowedDomains);
             setIdentitySuccess("Assistant settings saved.");
         }
 
@@ -314,7 +372,7 @@ export default function SettingsPage() {
     }
 
     return (
-        <div className="h-full min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8 dark:bg-slate-950 transition-colors duration-150">
+        <div className="app-scroll flex-1 bg-slate-50 p-4 pb-[max(1.5rem,calc(1.5rem+env(safe-area-inset-bottom,0px)))] sm:p-6 lg:p-8 dark:bg-slate-950 transition-colors duration-150">
             <div className="mx-auto w-full max-w-5xl">
                 {/* ── Fixed Header ─────────────────── */}
                 <header className="mb-3.5 shrink-0">
@@ -339,20 +397,20 @@ export default function SettingsPage() {
                     <fieldset disabled={identityLoading || identitySaving} className="grid gap-3 p-4 sm:grid-cols-2">
                         <div>
                             <label htmlFor="business-name" className="text-xs font-medium text-slate-700 dark:text-slate-300">Business Name</label>
-                            <input id="business-name" value={businessName} onChange={(event) => setBusinessName(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.businessName} required className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+                            <input id="business-name" value={businessName} onChange={(event) => setBusinessName(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.businessName} required className="mt-1.5 w-full min-h-[44px] sm:min-h-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
                         </div>
                         <div>
                             <label htmlFor="assistant-name" className="text-xs font-medium text-slate-700 dark:text-slate-300">Assistant Name</label>
-                            <input id="assistant-name" value={assistantName} onChange={(event) => setAssistantName(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.assistantName} required className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+                            <input id="assistant-name" value={assistantName} onChange={(event) => setAssistantName(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.assistantName} required className="mt-1.5 w-full min-h-[44px] sm:min-h-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
                         </div>
                         <div className="sm:col-span-2">
                             <label htmlFor="welcome-message" className="text-xs font-medium text-slate-700 dark:text-slate-300">Welcome Message</label>
-                            <textarea id="welcome-message" value={welcomeMessage} onChange={(event) => setWelcomeMessage(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.welcomeMessage} required rows={2} className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+                            <textarea id="welcome-message" value={welcomeMessage} onChange={(event) => setWelcomeMessage(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.welcomeMessage} required rows={2} className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
                         </div>
                         <div className="sm:col-span-2">
                             <label htmlFor="custom-instructions" className="text-xs font-medium text-slate-700 dark:text-slate-300">Custom Instructions</label>
                             <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">Tell the assistant how it should behave when answering customers.</p>
-                            <textarea id="custom-instructions" value={customInstructions} onChange={(event) => setCustomInstructions(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.customInstructions} rows={4} className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
+                            <textarea id="custom-instructions" value={customInstructions} onChange={(event) => setCustomInstructions(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.customInstructions} rows={4} className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
                             <p className="mt-1 text-right text-[11px] text-slate-400 dark:text-slate-500">{customInstructions.length}/{ASSISTANT_SETTINGS_LIMITS.customInstructions}</p>
                         </div>
                         <div className="sm:col-span-2 mt-1 border-t border-slate-100 pt-3 dark:border-slate-800">
@@ -380,13 +438,13 @@ export default function SettingsPage() {
                                                 maxLength={ASSISTANT_SETTINGS_LIMITS.suggestedQuestion}
                                                 placeholder="e.g. What is your return policy?"
                                                 aria-label={`Suggested question ${index + 1}`}
-                                                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                                className="min-w-0 flex-1 min-h-[44px] sm:min-h-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => handleRemoveSuggestedQuestion(index)}
                                                 aria-label={`Remove suggested question ${index + 1}`}
-                                                className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-medium text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-400 dark:hover:border-red-900 dark:hover:bg-red-950/30 dark:hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                                                className="shrink-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-medium text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-400 dark:hover:border-red-900 dark:hover:bg-red-950/30 dark:hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
                                             >
                                                 Remove
                                             </button>
@@ -405,13 +463,85 @@ export default function SettingsPage() {
                                 </div>
                             )}
                         </div>
+                        <div className="sm:col-span-2 mt-1 border-t border-slate-100 pt-3 dark:border-slate-800">
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                                Allowed Domains
+                            </h3>
+                            <p className="mt-1 text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">
+                                Restrict this assistant to exact website hostnames, such as support.example.com.
+                                Subdomains are not automatically included. Leave the list empty to disable
+                                assistant-specific domain restrictions; global origin restrictions still apply.
+                            </p>
+                            {!allowedDomainsAvailable ? (
+                                <p role="status" className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
+                                    Not available yet — the database migration that adds allowed domains has not been applied.
+                                </p>
+                            ) : (
+                                <>
+                                    <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                                        <input
+                                            id="new-allowed-domain"
+                                            value={newAllowedDomain}
+                                            onChange={(event) => {
+                                                setNewAllowedDomain(event.target.value);
+                                                setAllowedDomainsError("");
+                                            }}
+                                            onKeyDown={(event) => {
+                                                if (event.key === "Enter") {
+                                                    event.preventDefault();
+                                                    handleAddAllowedDomain();
+                                                }
+                                            }}
+                                            placeholder="support.example.com"
+                                            aria-describedby="allowed-domains-help"
+                                            className="min-w-0 flex-1 min-h-[44px] sm:min-h-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleAddAllowedDomain}
+                                            className="min-h-[44px] sm:min-h-0 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 transition hover:border-teal-200 hover:bg-teal-50/50 hover:text-teal-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-teal-600/50 dark:hover:bg-teal-950/30 dark:hover:text-teal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+                                        >
+                                            + Add domain
+                                        </button>
+                                    </div>
+                                    <p id="allowed-domains-help" className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                                        Enter a hostname only — no scheme, path, port, credentials, wildcard, or suffix matching.
+                                    </p>
+                                    {allowedDomains.length > 0 && (
+                                        <ul className="mt-2 flex flex-col gap-2">
+                                            {allowedDomains.map((domain) => (
+                                                <li key={domain} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200">
+                                                    <code className="min-w-0 break-all">{domain}</code>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setAllowedDomains((current) => current.filter((item) => item !== domain));
+                                                            setAllowedDomainsError("");
+                                                        }}
+                                                        aria-label={`Remove ${domain}`}
+                                                        className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 transition hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-950/30 dark:hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                    {allowedDomainsError && (
+                                        <p role="alert" className="mt-2 text-xs text-red-600 dark:text-red-400">
+                                            {allowedDomainsError}
+                                        </p>
+                                    )}
+                                </>
+                            )}
+                        </div>
                         <div className="flex min-h-9 items-center sm:col-span-2">
                             {identityLoading && <p className="text-xs text-slate-500 dark:text-slate-400">Loading assistant settings…</p>}
-                            {identityError && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{identityError}</p>}
-                            {identitySuccess && <p role="status" className="text-xs text-emerald-600 dark:text-emerald-400">{identitySuccess}</p>}
+                            {identityError && <p role="alert" aria-live="assertive" className="text-xs text-red-600 dark:text-red-400">{identityError}</p>}
+                            {identitySuccess && <p role="status" aria-live="polite" className="text-xs text-emerald-600 dark:text-emerald-400">{identitySuccess}</p>}
                         </div>
                         <div className="flex justify-end sm:col-span-2">
-                            <button type="submit" disabled={identityLoading || identitySaving} className="rounded-lg bg-teal-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-teal-500 dark:hover:bg-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
+                            <button type="submit" disabled={identityLoading || identitySaving} className="min-h-[44px] sm:min-h-0 rounded-lg bg-teal-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-teal-500 dark:hover:bg-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2">
                                 {identitySaving ? "Saving…" : "Save assistant settings"}
                             </button>
                         </div>
@@ -439,13 +569,13 @@ export default function SettingsPage() {
                             readOnly
                             value={assistantId ?? ""}
                             placeholder={identityLoading ? "Loading..." : ""}
-                            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                            className="min-w-0 flex-1 min-h-[44px] sm:min-h-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                         />
                         <button
                             type="button"
                             onClick={handleCopyAssistantId}
                             disabled={!assistantId}
-                            className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900"
+                            className="min-h-[44px] sm:min-h-0 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900"
                         >
                             Copy
                         </button>
@@ -464,7 +594,7 @@ export default function SettingsPage() {
                     )}
                 </section>
 
-                {/* ── 2-Column Compact Grid (Fits 100% within viewport, completely unscrollable) ── */}
+                {/* ── Settings grid ─────────────────── */}
                 <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 lg:gap-4">
                     {/* LEFT COLUMN */}
                     <div className="flex flex-col gap-3.5">
@@ -478,7 +608,7 @@ export default function SettingsPage() {
 
                             <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
                                 {/* Theme */}
-                                <div className="flex items-center justify-between px-4 py-2.5">
+                                <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-2.5">
                                     <div>
                                         <label className="font-medium text-slate-700 dark:text-slate-300">
                                             Theme
@@ -500,7 +630,7 @@ export default function SettingsPage() {
                                 </div>
 
                                 {/* Language */}
-                                <div className="flex items-center justify-between px-4 py-2.5">
+                                <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-2.5">
                                     <div>
                                         <label className="font-medium text-slate-700 dark:text-slate-300">
                                             Language
@@ -515,7 +645,7 @@ export default function SettingsPage() {
                                 </div>
 
                                 {/* Response style */}
-                                <div className="flex items-center justify-between px-4 py-2.5">
+                                <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-2.5">
                                     <div>
                                         <label className="font-medium text-slate-700 dark:text-slate-300">
                                             Response style
@@ -601,7 +731,7 @@ export default function SettingsPage() {
                             </div>
 
                             <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                                <div className="flex items-center justify-between px-4 py-2.5">
+                                <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-2.5">
                                     <div>
                                         <label className="font-medium text-slate-700 dark:text-slate-300">
                                             Response length
