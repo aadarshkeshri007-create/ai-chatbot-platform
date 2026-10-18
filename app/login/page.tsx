@@ -4,8 +4,8 @@ import Input from "@/components/Input";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { createLoginRequest } from "@/lib/auth/login-request";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,50 +25,21 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const supabase = createClient();
+      const request = createLoginRequest(email.trim(), password);
+      const response = await fetch(request.url, request.init);
+      const result = await response.json() as { ok?: boolean; error?: string };
 
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-
-      if (signInError) {
-        setError("Unable to sign in. Check your email and password and try again.");
-        setLoading(false);
+      if (!response.ok || !result.ok) {
+        setError(result.error ?? "Unable to sign in. Check your email and password and try again.");
         return;
-      }
-
-      if (!data?.session) {
-        setError(
-          "Sign-in succeeded but no active session was established. Please confirm your email if required."
-        );
-        setLoading(false);
-        return;
-      }
-
-      // Safe non-sensitive diagnostic check in development
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[Auth Debug] Sign-in succeeded:", {
-          hasUser: !!data.user,
-          hasSession: !!data.session,
-          hasAuthCookie:
-            typeof document !== "undefined" && document.cookie.includes("sb-"),
-        });
-      }
-
-      // Verify session is active in client before redirecting
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[Auth Debug] Client session verification:", {
-          persisted: !!sessionData?.session,
-        });
       }
 
       router.refresh();
       router.push("/chat");
-    } catch (err: unknown) {
-      console.error("[Auth Debug] Unexpected sign-in error:", err);
+    } catch {
       setError("An unexpected error occurred during sign-in. Please try again.");
+    } finally {
+      setPassword("");
       setLoading(false);
     }
   };
@@ -111,11 +82,12 @@ export default function LoginPage() {
           </p>
         </header>
 
-        <form className="flex flex-col" onSubmit={handleSubmit}>
+        <form className="flex flex-col" method="post" action="/api/auth/login" onSubmit={handleSubmit}>
           <div className="flex flex-col gap-4">
             <Input
               label="Email"
               id="email"
+              name="email"
               type="email"
               placeholder="name@company.com"
               value={email}
@@ -208,6 +180,9 @@ export default function LoginPage() {
             </Button>
           </div>
         </form>
+        <Link href="/forgot-password" className="mt-3 text-center text-sm font-medium text-teal-700 hover:underline dark:text-teal-400">
+          Forgot password?
+        </Link>
 
         <footer className="flex flex-col gap-4 text-center">
           <div className="relative">

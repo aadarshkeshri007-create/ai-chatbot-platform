@@ -12,7 +12,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
       {/* Assistant avatar */}
       {!isUser && (
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-600 dark:bg-teal-500 mt-0.5 shadow-sm">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] mt-0.5 shadow-sm">
           <svg
             width="14"
             height="14"
@@ -34,7 +34,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         className={
           isUser
             ? "max-w-[88%] sm:max-w-lg min-w-0 break-words [overflow-wrap:anywhere] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-teal-600 px-3.5 py-2.5 sm:px-4 text-[14px] leading-relaxed text-white shadow-sm"
-            : "max-w-[88%] sm:max-w-2xl min-w-0 break-words [overflow-wrap:anywhere] whitespace-pre-wrap rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-3.5 py-2.5 sm:px-4 text-[14px] leading-relaxed text-slate-800 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+            : "max-w-[88%] sm:max-w-2xl min-w-0 break-words [overflow-wrap:anywhere] whitespace-pre-wrap rounded-2xl rounded-bl-sm border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2.5 sm:px-4 text-[14px] leading-relaxed text-[var(--text-primary)] shadow-sm"
         }
       >
         <MessageContent content={message.content} isUser={isUser} />
@@ -42,7 +42,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
       {/* User avatar */}
       {isUser && (
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-700 dark:bg-slate-600 mt-0.5 shadow-sm">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--text-primary)] mt-0.5 shadow-sm">
           <svg
             width="14"
             height="14"

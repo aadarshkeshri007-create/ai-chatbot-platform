@@ -38,8 +38,8 @@ export default function ChatInput({
   const canSend = message.trim().length > 0 && !loading;
 
   return (
-    <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:px-5 sm:py-4 dark:border-slate-800 dark:bg-slate-900 transition-colors duration-150">
-      <div className="mx-auto flex max-w-3xl items-end gap-2">
+    <footer className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:px-5 sm:py-4 transition-colors duration-150">
+      <div className="mx-auto flex max-w-3xl items-end gap-3">
         <div className="relative flex-1">
           <textarea
             ref={textareaRef}
@@ -50,7 +50,7 @@ export default function ChatInput({
             onKeyDown={handleKeyDown}
             disabled={loading}
             rows={1}
-            className="max-h-40 w-full resize-none overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 sm:px-4 text-base sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-sm transition-all duration-150 focus:border-teal-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/15 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed dark:border-slate-700/80 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400 dark:focus:bg-slate-900 dark:disabled:bg-slate-800/50 dark:disabled:text-slate-600"
+            className="max-h-40 w-full resize-none overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2.5 sm:px-4 text-base sm:text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] shadow-sm transition-colors duration-150 focus:border-[var(--focus)] focus:bg-[var(--surface)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]/15 disabled:bg-[var(--surface-muted)] disabled:text-[var(--text-secondary)] disabled:cursor-not-allowed"
             aria-label="Chat message"
           />
         </div>
@@ -60,7 +60,7 @@ export default function ChatInput({
           type="button"
           onClick={onSend}
           disabled={!canSend}
-          className="flex h-11 w-11 sm:h-10 sm:w-10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white shadow-sm transition-all duration-150 hover:bg-teal-700 hover:shadow-md active:scale-[0.95] disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:active:scale-100 dark:bg-teal-500 dark:hover:bg-teal-600 dark:disabled:bg-slate-800 dark:disabled:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+          className="flex h-11 w-11 sm:h-10 sm:w-10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-white shadow-sm transition-all duration-150 hover:brightness-95 active:scale-[0.95] disabled:bg-[var(--surface-muted)] disabled:text-[var(--text-secondary)] disabled:shadow-none disabled:active:scale-100"
           aria-label={loading ? "Sending message" : "Send message"}
         >
           {loading ? (

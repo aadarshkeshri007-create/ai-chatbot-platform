@@ -6,8 +6,19 @@
 /* ── Global Theme Colors & Tokens ──────────────────────── */
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #f7f7f4;
+  --foreground: #202c2a;
+  --surface: #ffffff;
+  --surface-muted: #f2f4f1;
+  --text-primary: #202c2a;
+  --text-secondary: #69736f;
+  --border: #e4e7e2;
+  --accent: #236b5b;
+  --accent-soft: #dcefe9;
+  --focus: #4b9b86;
+  --success: #2e7d5b;
+  --warning: #a86e24;
+  --error: #b94a4a;
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
@@ -15,8 +26,19 @@
 }
 
 .dark {
-  --background: #090d16;
-  --foreground: #f1f5f9;
+  --background: #171b1a;
+  --foreground: #f1f3f0;
+  --surface: #222826;
+  --surface-muted: #1d2321;
+  --text-primary: #f1f3f0;
+  --text-secondary: #adb8b2;
+  --border: #343d39;
+  --accent: #78b6a0;
+  --accent-soft: #29483f;
+  --focus: #78b6a0;
+  --success: #79b995;
+  --warning: #e2ae68;
+  --error: #e58b8b;
 }
 
 /* ── Viewport & Base Resets ────────────────────────────── */
@@ -31,11 +53,32 @@ html {
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  font-family: var(--font-sans, Inter, ui-sans-serif, system-ui, -apple-system, sans-serif);
+  letter-spacing: -0.008em;
   min-height: 100%;
   min-height: 100dvh;
   overflow-x: clip;
   -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.app-shell-surface {
+  background: var(--surface);
+  border-color: var(--border);
 }
 
 /*
@@ -46,9 +89,15 @@ body {
  * remains the standards-based fallback.
  */
 .app-viewport {
+  position: fixed;
+  inset: 0;
+  width: 100%;
   height: 100svh;
   height: 100dvh;
   height: var(--app-viewport-height, 100dvh);
+  min-height: 0;
+  min-width: 0;
+  max-height: 100dvh;
 }
 
 .app-scroll {
@@ -173,12 +222,12 @@ textarea {
 
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 45%, transparent) transparent;
   -webkit-overflow-scrolling: touch;
 }
 
 .dark .scrollbar-thin {
-  scrollbar-color: #334155 transparent;
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 45%, transparent) transparent;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -191,18 +240,18 @@ textarea {
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
+  background-color: color-mix(in srgb, var(--text-secondary) 45%, transparent);
   border-radius: 9999px;
 }
 
 .dark .scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: #334155;
+  background-color: color-mix(in srgb, var(--text-secondary) 45%, transparent);
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8;
+  background-color: var(--text-secondary);
 }
 
 .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background-color: #475569;
+  background-color: var(--text-secondary);
 }

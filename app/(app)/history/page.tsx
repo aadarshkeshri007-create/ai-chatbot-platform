@@ -1,7 +1,16 @@
+import PageFrame from "@/components/PageFrame";
+import PageHeader from "@/components/PageHeader";
+
 export default function HistoryPage() {
     return (
-        <div className="app-scroll flex flex-1 flex-col items-center justify-center bg-slate-50 px-4 py-10 sm:px-6 dark:bg-slate-950 transition-colors duration-150">
-            <div className="flex max-w-md flex-col items-center text-center">
+        <PageFrame>
+            <PageHeader
+                eyebrow="Conversations"
+                title="Chat history"
+                description="Review previous customer conversations and return to the context you need."
+            />
+            <div className="flex min-h-[360px] items-center justify-center">
+            <div className="surface flex max-w-md flex-col items-center border-dashed p-8 text-center">
                 {/* Icon */}
                 <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-teal-50 dark:bg-teal-950/40">
                     <svg
@@ -21,19 +30,20 @@ export default function HistoryPage() {
                     </svg>
                 </div>
 
-                <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">
                     Chat History
-                </h1>
+                </h2>
 
-                <p className="mt-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+                <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">
                     View and search through your past conversations. This feature is coming soon.
                 </p>
 
-                <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-medium text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+                <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-1.5 text-xs font-medium text-[var(--text-secondary)]">
                     <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400" />
                     Coming soon
                 </div>
-            </div>
-        </div>
+                </div>
+                </div>
+        </PageFrame>
     );
 }

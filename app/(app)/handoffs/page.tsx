@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { mergeHandoffTranscript } from "@/lib/handoff-transcript";
+import PageFrame from "@/components/PageFrame";
+import PageHeader from "@/components/PageHeader";
 
 type Handoff = {
   id: string;
@@ -109,20 +111,20 @@ export default function HandoffsPage() {
   };
 
   return (
-    <div className="app-scroll flex-1 bg-slate-50 px-4 py-6 sm:px-6 lg:px-8 dark:bg-slate-950">
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <header>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Support inbox</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Respond to customers who asked to talk with a human.</p>
-        </header>
-        {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
+    <PageFrame>
+      <PageHeader
+        eyebrow="Human support"
+        title="Support inbox"
+        description="Respond to customers who asked to talk with a human and keep every handoff in context."
+      />
+        {error && <p role="alert" className="mb-5 rounded-lg border border-[color-mix(in_srgb,var(--error)_30%,transparent)] bg-[color-mix(in_srgb,var(--error)_10%,transparent)] p-3 text-sm text-[var(--error)]">{error}</p>}
         {loading ? <p className="text-sm text-slate-500">Loading support requests…</p> : (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
             <section className="space-y-3">
-              {handoffs.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">No support requests yet.</p>}
+              {handoffs.length === 0 && <p className="surface rounded-xl border-dashed p-8 text-sm text-[var(--text-secondary)]">No support requests yet.</p>}
               {handoffs.map((handoff) => (
                 <button key={handoff.id} type="button" onClick={() => void select(handoff)}
-                  className={`w-full rounded-xl border p-4 text-left shadow-sm ${selected?.id === handoff.id ? "border-teal-500 bg-teal-50 dark:bg-teal-950/30" : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"}`}>
+                  className={`surface w-full rounded-xl p-4 text-left transition-colors hover:border-[var(--accent)] ${selected?.id === handoff.id ? "border-[var(--accent)] bg-[var(--accent-soft)]" : ""}`}>
                   <div className="flex items-center justify-between gap-3">
                     <strong className="truncate text-sm text-slate-900 dark:text-slate-100">{handoff.customer_name || "Website visitor"}</strong>
                     <span className="text-xs text-slate-500">{STATUS_LABELS[handoff.status] || handoff.status}</span>
@@ -132,8 +134,8 @@ export default function HandoffsPage() {
                 </button>
               ))}
             </section>
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              {!selected ? <p className="text-sm text-slate-500">Select a request to view its context.</p> : (
+            <section className="surface rounded-xl p-5">
+              {!selected ? <p className="text-sm text-[var(--text-secondary)]">Select a request to view its context.</p> : (
                 <>
                   <div className="border-b border-slate-200 pb-4 dark:border-slate-800">
                     <h2 className="font-semibold text-slate-900 dark:text-slate-100">{selected.customer_name || "Website visitor"}</h2>
@@ -146,7 +148,7 @@ export default function HandoffsPage() {
                   </div>
                   <div className="max-h-[420px] space-y-3 overflow-y-auto py-4">
                     {messages.map((message) => (
-                      <div key={message.id} className={`rounded-lg p-3 text-sm ${message.role === "human" ? "ml-8 bg-teal-50 text-teal-950 dark:bg-teal-950/30 dark:text-teal-100" : "mr-8 bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200"}`}>
+                      <div key={message.id} className={`rounded-lg border p-3 text-sm ${message.role === "human" ? "ml-8 border-[color-mix(in_srgb,var(--success)_25%,var(--border))] bg-[color-mix(in_srgb,var(--success)_10%,var(--surface))] text-[var(--text-primary)]" : "mr-8 border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-primary)]"}`}>
                         <strong className="block text-xs uppercase tracking-wide">{message.role === "human" ? "Human reply" : message.role === "assistant" ? "AI context" : "Customer context"}</strong>
                         <p className="mt-1 whitespace-pre-wrap">{message.content}</p>
                       </div>
@@ -161,7 +163,6 @@ export default function HandoffsPage() {
             </section>
           </div>
         )}
-      </main>
-    </div>
+    </PageFrame>
   );
 }

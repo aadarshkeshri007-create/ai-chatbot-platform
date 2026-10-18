@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
         "pdf-parse",
         "@napi-rs/canvas",
     ],
-    allowedDevOrigins: ["192.168.137.1"]
+    allowedDevOrigins: ["10.56.171.229"]
 };
 
 export default nextConfig;

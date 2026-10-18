@@ -11,6 +11,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/chat": "AI Assistant",
   "/history": "Chat History",
   "/upload": "Knowledge Base",
+  "/handoffs": "Support Inbox",
   "/settings": "Settings",
   "/profile": "Profile",
 };
@@ -20,13 +21,13 @@ export default function ChatHeader({ onToggleSidebar }: ChatHeaderProps) {
   const pageTitle = PAGE_TITLES[pathname] ?? "AI Assistant";
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 sm:px-5 transition-colors duration-150 dark:border-slate-800 dark:bg-slate-900">
+    <header className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--surface)] px-4 sm:px-7 transition-colors duration-150">
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         {/* Mobile hamburger — 44px min touch target */}
         <button
           type="button"
           onClick={onToggleSidebar}
-          className="flex h-10 w-10 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          className="flex h-10 w-10 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0 items-center justify-center rounded-lg text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] lg:hidden"
           aria-label="Toggle sidebar"
         >
           <svg
@@ -48,8 +49,8 @@ export default function ChatHeader({ onToggleSidebar }: ChatHeaderProps) {
 
         {/* Title area */}
         <div className="flex items-center gap-2 min-w-0">
-          <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-400 dark:bg-emerald-500" aria-hidden="true" />
-          <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+          <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-[var(--success)]" aria-hidden="true" />
+          <span className="truncate text-sm font-semibold text-[var(--text-primary)]">
             {pageTitle}
           </span>
         </div>

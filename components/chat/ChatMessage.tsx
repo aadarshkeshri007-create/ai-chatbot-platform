@@ -45,7 +45,7 @@ export default function ChatMessages({
     <section
       ref={messagesContainerRef}
       onScroll={onScroll}
-      className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-50 px-4 py-6 scrollbar-thin [overflow-anchor:none] sm:px-6 dark:bg-slate-950 transition-colors duration-150"
+      className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[var(--background)] px-4 py-7 scrollbar-thin [overflow-anchor:none] sm:px-7 transition-colors duration-150"
     >
       {isNewChat ? (
         <EmptyState

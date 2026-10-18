@@ -15,11 +15,83 @@ import {
     parseSuggestedQuestions,
 } from "@/lib/assistant-settings";
 import { normalizeAllowedDomainInput } from "@/lib/public-chat-origin";
+import PageFrame from "@/components/PageFrame";
+import PageHeader from "@/components/PageHeader";
 
 /* ── Types ─────────────────────────────────────── */
 
 type ResponseLength = "short" | "balanced" | "detailed";
 type ResponseStyle = "balanced" | "formal" | "friendly";
+
+function Toggle({
+    id,
+    checked,
+    onChange,
+    label,
+}: {
+    id: string;
+    checked: boolean;
+    onChange: (value: boolean) => void;
+    label: string;
+}) {
+    return (
+        <button
+            id={id}
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            aria-label={label}
+            onClick={() => onChange(!checked)}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${
+                checked ? "bg-teal-600 dark:bg-teal-500" : "bg-slate-200 dark:bg-slate-700"
+            }`}
+        >
+            <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${
+                    checked ? "translate-x-4" : "translate-x-0"
+                }`}
+            />
+        </button>
+    );
+}
+
+function RadioGroup<T extends string>({
+    name,
+    options,
+    value,
+    onChange,
+}: {
+    name: string;
+    options: { value: T; label: string }[];
+    value: T;
+    onChange: (value: T) => void;
+}) {
+    return (
+        <div className="flex flex-wrap gap-1.5">
+            {options.map((option) => (
+                <label
+                    key={option.value}
+                    className={`relative inline-flex items-center cursor-pointer rounded-lg border px-2.5 py-1 text-xs font-medium transition-all duration-150 focus-within:ring-2 focus-within:ring-teal-500 focus-within:ring-offset-2 ${
+                        value === option.value
+                            ? "border-teal-300 bg-teal-50 text-teal-700 shadow-sm dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-300"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-700/60"
+                    }`}
+                >
+                    <input
+                        type="radio"
+                        name={name}
+                        value={option.value}
+                        checked={value === option.value}
+                        onChange={() => onChange(option.value)}
+                        className="absolute inset-0 h-full w-full opacity-0"
+                    />
+                    {option.label}
+                </label>
+            ))}
+        </div>
+    );
+}
 
 export default function SettingsPage() {
     /* ── Connected Theme State ─────────────────── */
@@ -299,102 +371,27 @@ export default function SettingsPage() {
         setIdentitySaving(false);
     };
 
-    /* ── Reusable toggle ──────────────────────── */
-    function Toggle({
-        id,
-        checked,
-        onChange,
-        label,
-    }: {
-        id: string;
-        checked: boolean;
-        onChange: (v: boolean) => void;
-        label: string;
-    }) {
-        return (
-            <button
-                id={id}
-                type="button"
-                role="switch"
-                aria-checked={checked}
-                aria-label={label}
-                onClick={() => onChange(!checked)}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${
-                    checked ? "bg-teal-600 dark:bg-teal-500" : "bg-slate-200 dark:bg-slate-700"
-                }`}
-            >
-                <span
-                    aria-hidden="true"
-                    className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${
-                        checked ? "translate-x-4" : "translate-x-0"
-                    }`}
-                />
-            </button>
-        );
-    }
-
-    /* ── Reusable radio group ─────────────────── */
-    function RadioGroup<T extends string>({
-        name,
-        options,
-        value,
-        onChange,
-    }: {
-        name: string;
-        options: { value: T; label: string }[];
-        value: T;
-        onChange: (v: T) => void;
-    }) {
-        return (
-            <div className="flex flex-wrap gap-1.5">
-                {options.map((option) => (
-                    <label
-                        key={option.value}
-                        className={`cursor-pointer rounded-lg border px-2.5 py-1 text-xs font-medium transition-all duration-150 focus-within:ring-2 focus-within:ring-teal-500 focus-within:ring-offset-2 ${
-                            value === option.value
-                                ? "border-teal-300 bg-teal-50 text-teal-700 shadow-sm dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-300"
-                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-700/60"
-                        }`}
-                    >
-                        <input
-                            type="radio"
-                            name={name}
-                            value={option.value}
-                            checked={value === option.value}
-                            onChange={() => onChange(option.value)}
-                            className="sr-only"
-                        />
-                        {option.label}
-                    </label>
-                ))}
-            </div>
-        );
-    }
-
     return (
-        <div className="app-scroll flex-1 bg-slate-50 p-4 pb-[max(1.5rem,calc(1.5rem+env(safe-area-inset-bottom,0px)))] sm:p-6 lg:p-8 dark:bg-slate-950 transition-colors duration-150">
+        <PageFrame>
             <div className="mx-auto w-full max-w-5xl">
                 {/* ── Fixed Header ─────────────────── */}
-                <header className="mb-3.5 shrink-0">
-                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                        Settings
-                    </h1>
-                    <p className="mt-0.5 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                        Customize your experience and your assistant identity.
-                    </p>
-                </header>
+                <PageHeader
+                    eyebrow="Workspace configuration"
+                    title="Settings"
+                    description="Shape how your assistant represents your business, answers customers, and appears in the embedded experience."
+                />
 
-                <form onSubmit={handleAssistantSettingsSave} className="mb-4 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                    <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-                        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                <form onSubmit={handleAssistantSettingsSave} className="mb-8">
+                    <div className="border-b border-[var(--border)] pb-4">
+                        <h2 className="text-base font-semibold text-[var(--text-primary)]">
                             Assistant identity
                         </h2>
-                        <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                        <p className="mt-1 text-sm text-[var(--text-secondary)]">
                             These details appear in your chat and guide your AI assistant.
                         </p>
                     </div>
 
-                    <fieldset disabled={identityLoading || identitySaving} className="grid gap-3 p-4 sm:grid-cols-2">
+                    <fieldset disabled={identityLoading || identitySaving} className="grid gap-x-6 gap-y-5 border-b border-[var(--border)] py-6 sm:grid-cols-2">
                         <div>
                             <label htmlFor="business-name" className="text-xs font-medium text-slate-700 dark:text-slate-300">Business Name</label>
                             <input id="business-name" value={businessName} onChange={(event) => setBusinessName(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.businessName} required className="mt-1.5 w-full min-h-[44px] sm:min-h-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
@@ -550,20 +547,20 @@ export default function SettingsPage() {
 
                 <section
                     aria-labelledby="assistant-id-heading"
-                    className="mb-4 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                    className="mb-8 border-b border-[var(--border)] pb-6"
                 >
-                    <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+                    <div className="mb-3">
                         <h2
                             id="assistant-id-heading"
-                            className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300"
+                            className="text-base font-semibold text-[var(--text-primary)]"
                         >
                             Assistant ID
                         </h2>
-                        <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                        <p className="mt-1 text-sm text-[var(--text-secondary)]">
                             Use this ID later to connect your assistant to a website.
                         </p>
                     </div>
-                    <div className="flex flex-col gap-2 p-4 sm:flex-row">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                         <input
                             aria-label="Assistant ID"
                             readOnly
@@ -595,18 +592,18 @@ export default function SettingsPage() {
                 </section>
 
                 {/* ── Settings grid ─────────────────── */}
-                <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 lg:gap-4">
+                <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-x-12">
                     {/* LEFT COLUMN */}
-                    <div className="flex flex-col gap-3.5">
+                    <div className="flex flex-col gap-10">
                         {/* 1. GENERAL */}
-                        <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
-                            <div className="border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
-                                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                        <section className="border-b border-[var(--border)] pb-6">
+                            <div className="mb-4">
+                                <h2 className="text-base font-semibold text-[var(--text-primary)]">
                                     General
                                 </h2>
                             </div>
 
-                            <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                            <div className="divide-y divide-[var(--border)] text-sm">
                                 {/* Theme */}
                                 <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-2.5">
                                     <div>
@@ -669,14 +666,14 @@ export default function SettingsPage() {
                         </section>
 
                         {/* 2. NOTIFICATIONS */}
-                        <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
-                            <div className="border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
-                                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                        <section className="border-b border-[var(--border)] pb-6">
+                            <div className="mb-4">
+                                <h2 className="text-base font-semibold text-[var(--text-primary)]">
                                     Notifications
                                 </h2>
                             </div>
 
-                            <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                            <div className="divide-y divide-[var(--border)] text-sm">
                                 <div className="flex items-center justify-between px-4 py-2.5">
                                     <div>
                                         <label
@@ -721,16 +718,16 @@ export default function SettingsPage() {
                     </div>
 
                     {/* RIGHT COLUMN */}
-                    <div className="flex flex-col gap-3.5">
+                    <div className="flex flex-col gap-10">
                         {/* 3. AI PREFERENCES */}
-                        <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
-                            <div className="border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
-                                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                        <section className="border-b border-[var(--border)] pb-6">
+                            <div className="mb-4">
+                                <h2 className="text-base font-semibold text-[var(--text-primary)]">
                                     AI Preferences
                                 </h2>
                             </div>
 
-                            <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                            <div className="divide-y divide-[var(--border)] text-sm">
                                 <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-2.5">
                                     <div>
                                         <label className="font-medium text-slate-700 dark:text-slate-300">
@@ -775,14 +772,14 @@ export default function SettingsPage() {
                         </section>
 
                         {/* 4. ACCOUNT */}
-                        <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
-                            <div className="border-b border-slate-100 px-4 py-2.5 dark:border-slate-800">
-                                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                        <section className="border-b border-[var(--border)] pb-6">
+                            <div className="mb-4">
+                                <h2 className="text-base font-semibold text-[var(--text-primary)]">
                                     Account
                                 </h2>
                             </div>
 
-                            <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                            <div className="divide-y divide-[var(--border)] text-sm">
                                 <Link
                                     href="/profile"
                                     className="flex items-center justify-between px-4 py-2.5 text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
@@ -821,10 +818,10 @@ export default function SettingsPage() {
                 </div>
 
                 {/* ── Notice Footer ────────────── */}
-                <div className="mt-3 shrink-0 rounded-lg border border-slate-200 bg-white/70 px-3.5 py-2 text-center text-[11px] text-slate-400 shadow-sm dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-500">
+                <div className="mt-8 border-t border-[var(--border)] pt-4 text-center text-xs text-[var(--text-secondary)]">
                     Assistant identity is securely synced to your account. Other settings are stored locally in your browser.
                 </div>
             </div>
-        </div>
+        </PageFrame>
     );
 }

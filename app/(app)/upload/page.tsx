@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { generateClientUuid } from "@/lib/client-uuid";
+import PageFrame from "@/components/PageFrame";
+import PageHeader from "@/components/PageHeader";
 
 type Document = {
   id: string;
@@ -367,23 +369,17 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="app-scroll flex-1 bg-slate-50 px-4 py-6 pb-[max(1.5rem,calc(1.5rem+env(safe-area-inset-bottom,0px)))] sm:px-6 sm:py-8 lg:px-8 lg:py-10 transition-colors duration-150 dark:bg-slate-950">
+    <PageFrame>
       <div className="mx-auto max-w-5xl">
-        <header className="mb-6">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Knowledge Base
-          </h1>
+        <PageHeader
+          eyebrow="Training source"
+          title="Knowledge Base"
+          description="Upload the documents your assistant should use when answering customer questions."
+        />
 
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Upload documents that your AI
-            assistant can use to answer
-            customer questions.
-          </p>
-        </header>
-
-        <section className="rounded-xl sm:rounded-2xl border border-slate-200 bg-white p-4 sm:p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <section className="mb-10 border-b border-[var(--border)] pb-8">
           <div
-            className={`group relative flex flex-col items-center justify-center overflow-hidden rounded-xl sm:rounded-2xl border-2 border-dashed px-4 py-8 sm:px-6 sm:py-12 text-center transition-all duration-300 ${uploading
+            className={`group relative flex items-center gap-4 overflow-hidden rounded-xl border border-dashed px-4 py-4 text-left transition-all duration-300 sm:px-5 ${uploading
                 ? "border-teal-400 bg-teal-50/50 dark:border-teal-500/60 dark:bg-teal-950/20"
                 : "border-slate-200 bg-slate-50/50 hover:border-teal-300 hover:bg-teal-50/30 dark:border-slate-700/70 dark:bg-slate-900/40 dark:hover:border-teal-700 dark:hover:bg-teal-950/10"
               }`}
@@ -401,7 +397,7 @@ export default function UploadPage() {
 
             {/* Upload icon */}
             <div
-              className={`relative mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border transition-all duration-500 ${uploading
+              className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-all duration-500 ${uploading
                   ? "border-teal-200 bg-white shadow-lg shadow-teal-500/20 dark:border-teal-800 dark:bg-slate-900"
                   : "border-slate-200 bg-white shadow-sm group-hover:-translate-y-1 group-hover:border-teal-200 group-hover:shadow-lg group-hover:shadow-teal-500/10 dark:border-slate-700 dark:bg-slate-900"
                 }`}
@@ -471,13 +467,14 @@ export default function UploadPage() {
               </div>
             </div>
 
-            <h2 className="relative text-base font-semibold text-slate-900 dark:text-slate-100">
+            <div className="relative min-w-0 flex-1">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               {uploading
                 ? "Uploading your documents..."
                 : "Build your knowledge base"}
             </h2>
 
-            <p className="relative mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">
+            <p className="mt-1 max-w-xl text-xs leading-5 text-slate-500 dark:text-slate-400">
               {uploading
                 ? "Securely uploading your files to your AI knowledge base."
                 : "Upload PDF documents up to 20 MB each. Your AI assistant will be able to answer questions based on the content of these documents."}
@@ -490,7 +487,7 @@ export default function UploadPage() {
                 fileInputRef.current?.click()
               }
               disabled={uploading}
-              className="relative mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+              className="relative inline-flex min-h-[40px] shrink-0 items-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
             >
               {uploading ? (
                 <>
@@ -527,6 +524,7 @@ export default function UploadPage() {
               aria-label="Choose documents to upload"
             />
 
+            </div>
             {/* Animated upload progress */}
             {uploading && (
               <div className="relative mt-7 w-full max-w-sm">
@@ -570,8 +568,8 @@ export default function UploadPage() {
         </section>
 
         <section className="mb-10 mt-6">
-          <h2 className="mb-4 text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Your documents
+          <h2 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">
+            Documents
           </h2>
 
           {documents.length === 0 ? (
@@ -720,6 +718,6 @@ export default function UploadPage() {
           )}
         </section>
       </div>
-    </div>
+    </PageFrame>
   );
 }

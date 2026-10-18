@@ -65,8 +65,7 @@ export default function SignupPage() {
 
             setSuccess(true);
             setLoading(false);
-        } catch (err: unknown) {
-            console.error("[Auth Debug] Signup error:", err);
+        } catch {
             setError("An unexpected error occurred during signup. Please try again.");
             setLoading(false);
         }
@@ -141,7 +140,7 @@ export default function SignupPage() {
                 ) : (
                     <>
                         {/* Form */}
-                        <form className="flex flex-col" onSubmit={handleSignup}>
+                        <form className="flex flex-col" method="post" action="/signup" onSubmit={handleSignup}>
                             <div className="flex flex-col gap-4">
                                 {/* Full Name */}
                                 <div className="flex flex-col gap-1.5">

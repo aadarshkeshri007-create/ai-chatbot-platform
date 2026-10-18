@@ -10,12 +10,20 @@ export async function proxy(request: NextRequest) {
     });
     const pathname = request.nextUrl.pathname;
 
+    // Remove legacy password-bearing login URLs from the address bar without
+    // preserving any query string in the redirect.
+    if (request.method === "GET" && pathname === "/login" && request.nextUrl.searchParams.has("password")) {
+        return NextResponse.redirect(new URL("/login", request.url), 303);
+    }
+
     // The public chat route validates its own POST body and authentication
     // does not apply. Keep the exception exact; all other paths still use the
     // existing session checks below.
     if (
         pathname === "/widget.js" ||
         pathname === "/widget-frame" ||
+        pathname === "/api/auth/login" ||
+        pathname === "/auth/callback" ||
         pathname === "/api/public/handoff" ||
         (pathname === "/api/public/chat" &&
             (request.method === "POST" || request.method === "OPTIONS"))
@@ -51,7 +59,9 @@ export async function proxy(request: NextRequest) {
     const isPublicPage =
         pathname === "/" ||
         pathname === "/login" ||
-        pathname === "/signup";
+        pathname === "/signup" ||
+        pathname === "/forgot-password" ||
+        pathname === "/reset-password";
 
     const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith("sb-"));
     if (process.env.NODE_ENV !== "production" && !isPublicPage) {

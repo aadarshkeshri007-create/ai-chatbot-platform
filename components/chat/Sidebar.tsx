@@ -173,7 +173,7 @@ export default function Sidebar({
                 role={isOpen ? "dialog" : undefined}
                 aria-modal={isOpen ? "true" : undefined}
                 aria-label="Navigation"
-                className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200 bg-white transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-slate-900 lg:relative lg:z-auto lg:translate-x-0 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] ${
+                className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[var(--border)] bg-[var(--surface)] transition-all duration-300 ease-in-out lg:relative lg:z-auto lg:translate-x-0 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] ${
                     isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
                 } ${
                     collapsed ? "w-72 max-w-[calc(100vw-3rem)] lg:max-w-none lg:w-16" : "w-72 max-w-[calc(100vw-3rem)] lg:max-w-none"
@@ -190,12 +190,12 @@ export default function Sidebar({
                         aria-label="SupportAI Home"
                     >
                         <div
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-600 transition-colors group-hover/brand:bg-teal-700 shadow-sm"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] transition-colors group-hover/brand:brightness-95 shadow-sm"
                             aria-hidden="true"
                         >
                             <span className="text-xs font-bold text-white">AI</span>
                         </div>
-                        <span className={`text-sm font-semibold text-slate-900 dark:text-slate-100 transition-opacity duration-200 ${collapsed ? "lg:hidden" : "block"}`}>
+                        <span className={`text-sm font-semibold text-[var(--text-primary)] transition-opacity duration-200 ${collapsed ? "lg:hidden" : "block"}`}>
                             SupportAI
                         </span>
                     </Link>
@@ -260,7 +260,7 @@ export default function Sidebar({
                         onClick={handleNewChat}
                         title={collapsed ? "New chat" : undefined}
                         aria-label="New chat"
-                        className={`group/newchat relative flex w-full items-center rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-sm transition-all duration-150 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700 dark:border-slate-700/80 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:border-teal-600/50 dark:hover:bg-teal-950/30 dark:hover:text-teal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 active:scale-[0.98] ${
+                        className={`group/newchat relative flex w-full items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm font-semibold text-[var(--text-primary)] shadow-sm transition-all duration-150 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] focus-visible:outline-none active:scale-[0.98] ${
                             collapsed
                                 ? "justify-center px-0 py-2.5 lg:justify-center"
                                 : "gap-2 px-3 py-2.5"

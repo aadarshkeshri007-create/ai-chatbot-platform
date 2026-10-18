@@ -313,14 +313,14 @@ export default function WidgetFrame() {
           height: 100dvh;
           min-height: 0;
           overflow: hidden;
-          color: #0f172a; background: #fff;
+          color: #202c2a; background: #f7f7f4;
         }
         .header {
           display: flex; align-items: center; justify-content: space-between;
           gap: 12px;
           padding: 14px 16px;
           padding-top: max(14px, calc(14px + env(safe-area-inset-top, 0px)));
-          color: #fff; background: #1d4ed8;
+          color: #fff; background: #236b5b;
           flex-shrink: 0;
         }
         .header-text { flex: 1; min-width: 0; }
@@ -336,13 +336,13 @@ export default function WidgetFrame() {
           transition: background 150ms;
         }
         .close-btn:hover { background: rgba(255,255,255,.15); }
-        .close-btn:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+        .close-btn:focus-visible { outline: 3px solid #78b6a0; outline-offset: 2px; }
         .messages {
           flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
           overscroll-behavior: contain;
           padding: 14px;
-          background: #f8fafc;
+          background: #f7f7f4;
         }
         .message {
           max-width: 88%; margin: 0 0 12px;
@@ -350,14 +350,14 @@ export default function WidgetFrame() {
           overflow-wrap: anywhere; word-break: break-word;
           font-size: 14px; line-height: 1.5;
         }
-        .assistant { background: #fff; border: 1px solid #e2e8f0; }
-        .human { background: #f0fdf4; border: 1px solid #bbf7d0; }
-        .user { margin-left: auto; white-space: pre-wrap; background: #2563eb; color: #fff; }
+        .assistant { background: #fff; border: 1px solid #e4e7e2; }
+        .human { background: #e4f2ec; border: 1px solid #b8d8ca; }
+        .user { margin-left: auto; white-space: pre-wrap; background: #236b5b; color: #fff; }
         .sender-label {
           display: flex; align-items: center; gap: 5px; margin: 0 0 4px 4px;
-          color: #475569; font-size: 11px; font-weight: 700;
+          color: #69736f; font-size: 11px; font-weight: 700;
         }
-        .human-sender { color: #166534; }
+        .human-sender { color: #2e7d5b; }
         .sender-avatar { font-size: 13px; line-height: 1; }
         .markdown > :first-child { margin-top: 0; }
         .markdown > :last-child { margin-bottom: 0; }
@@ -366,84 +366,84 @@ export default function WidgetFrame() {
         .markdown h1 { font-size: 1.2em; } .markdown h2 { font-size: 1.08em; } .markdown h3 { font-size: 1em; }
         .markdown ul, .markdown ol { margin: .45em 0; padding-left: 1.35em; }
         .markdown li > p { margin: 0; }
-        .markdown a { color: #1d4ed8; text-decoration: underline; overflow-wrap: anywhere; }
-        .markdown code { padding: .1em .3em; border-radius: 4px; background: #e2e8f0; font-size: .88em; overflow-wrap: anywhere; }
-        .markdown pre { overflow-x: auto; margin: .55em 0; padding: 10px 12px; border-radius: 8px; background: #1e293b; }
-        .markdown pre code { background: none; color: #e2e8f0; font-size: .85em; }
+        .markdown a { color: #236b5b; text-decoration: underline; overflow-wrap: anywhere; }
+        .markdown code { padding: .1em .3em; border-radius: 4px; background: #eef1ed; font-size: .88em; overflow-wrap: anywhere; }
+        .markdown pre { overflow-x: auto; margin: .55em 0; padding: 10px 12px; border-radius: 8px; background: #202c2a; }
+        .markdown pre code { background: none; color: #f1f3f0; font-size: .85em; }
         .sources {
           margin: -4px 0 12px; padding: 0 4px;
-          color: #475569; font-size: 11px;
+          color: #69736f; font-size: 11px;
           display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center;
         }
         .sources strong { flex-shrink: 0; }
         .source {
           display: inline-block; padding: 2px 7px; border-radius: 5px;
-          background: #e2e8f0; white-space: nowrap;
+          background: #e8ece7; white-space: nowrap;
           max-width: min(160px, 45vw); overflow: hidden; text-overflow: ellipsis;
         }
         .error {
           flex-shrink: 0;
-          padding: 8px 14px; color: #b91c1c; background: #fef2f2;
-          font-size: 12px; border-top: 1px solid #fecaca;
+          padding: 8px 14px; color: #9e3f3f; background: #fceded;
+          font-size: 12px; border-top: 1px solid #edc4c4;
         }
         .status-banner {
-          flex-shrink: 0; padding: 8px 14px; color: #166534; background: #f0fdf4;
-          border-top: 1px solid #bbf7d0; font-size: 12px;
+          flex-shrink: 0; padding: 8px 14px; color: #276847; background: #e7f4ed;
+          border-top: 1px solid #b8d8ca; font-size: 12px;
         }
         form {
           display: flex; gap: 8px;
           padding: 10px 12px;
           padding-bottom: max(10px, calc(10px + env(safe-area-inset-bottom, 0px)));
-          border-top: 1px solid #e2e8f0; background: #fff;
+          border-top: 1px solid #e4e7e2; background: #fff;
           flex-shrink: 0;
         }
         input {
           min-width: 0; flex: 1;
           padding: 10px 12px;
-          border: 1px solid #cbd5e1; border-radius: 10px;
-          color: #0f172a; background: #fff;
+          border: 1px solid #cbd4cc; border-radius: 10px;
+          color: #202c2a; background: #fff;
           font: inherit;
           /* 16px prevents iOS Safari auto-zoom on focus */
           font-size: 16px;
           -webkit-appearance: none;
         }
-        input:focus { outline: 3px solid #93c5fd; outline-offset: -1px; border-color: #93c5fd; }
+        input:focus { outline: 3px solid #b8d8ca; outline-offset: -1px; border-color: #236b5b; }
         button[type=submit] {
           flex-shrink: 0;
           border: 0; border-radius: 10px;
           padding: 0 16px;
           min-height: 44px; min-width: 56px;
-          background: #2563eb; color: #fff;
+          background: #236b5b; color: #fff;
           cursor: pointer; font-weight: 600; font-size: 14px;
           -webkit-appearance: none;
         }
         button[type=submit]:disabled { cursor: wait; opacity: .55; }
-        button[type=submit]:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
-        .typing { color: #64748b; font-style: italic; }
+        button[type=submit]:focus-visible { outline: 3px solid #78b6a0; outline-offset: 2px; }
+        .typing { color: #69736f; font-style: italic; }
         .handoff-btn {
           flex-shrink: 0; width: 100%; border: 0; border-top: 1px solid #e2e8f0;
-          padding: 10px 14px; background: #fff; color: #1d4ed8; cursor: pointer;
+          padding: 10px 14px; background: #fff; color: #236b5b; cursor: pointer;
           font: 600 13px system-ui, sans-serif; text-align: left;
         }
         .handoff-btn:focus-visible, .handoff-actions button:focus-visible {
-          outline: 3px solid #93c5fd; outline-offset: -2px;
+          outline: 3px solid #78b6a0; outline-offset: -2px;
         }
         .handoff-form {
           display: flex; flex-direction: column; gap: 8px; padding: 12px;
-          border-top: 1px solid #e2e8f0; background: #fff; flex-shrink: 0;
+          border-top: 1px solid #e4e7e2; background: #fff; flex-shrink: 0;
           font-size: 13px;
         }
         .handoff-form input, .handoff-form textarea {
-          width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid #cbd5e1;
-          border-radius: 8px; color: #0f172a; background: #fff; font: inherit;
+          width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid #cbd4cc;
+          border-radius: 8px; color: #202c2a; background: #fff; font: inherit;
         }
         .handoff-form textarea { resize: vertical; }
         .handoff-actions { display: flex; gap: 8px; }
         .handoff-actions button {
           min-height: 38px; padding: 0 12px; border: 0; border-radius: 8px;
-          background: #2563eb; color: white; cursor: pointer; font-weight: 600;
+          background: #236b5b; color: white; cursor: pointer; font-weight: 600;
         }
-        .handoff-actions button:last-child { background: #e2e8f0; color: #334155; }
+        .handoff-actions button:last-child { background: #e8ece7; color: #3c4742; }
         .handoff-actions button:disabled { opacity: .55; cursor: wait; }
       `}</style>
       <header className="header">
