@@ -9,10 +9,11 @@ export async function proxy(request: NextRequest) {
         },
     });
     const pathname = request.nextUrl.pathname;
+    const normalizedPathname = pathname.replace(/\/+$/, "") || "/";
 
     // Remove legacy password-bearing login URLs from the address bar without
     // preserving any query string in the redirect.
-    if (request.method === "GET" && pathname === "/login" && request.nextUrl.searchParams.has("password")) {
+    if (request.method === "GET" && normalizedPathname === "/login" && request.nextUrl.searchParams.has("password")) {
         return NextResponse.redirect(new URL("/login", request.url), 303);
     }
 
@@ -20,12 +21,12 @@ export async function proxy(request: NextRequest) {
     // does not apply. Keep the exception exact; all other paths still use the
     // existing session checks below.
     if (
-        pathname === "/widget.js" ||
-        pathname === "/widget-frame" ||
-        pathname === "/api/auth/login" ||
-        pathname === "/auth/callback" ||
-        pathname === "/api/public/handoff" ||
-        (pathname === "/api/public/chat" &&
+        normalizedPathname === "/widget.js" ||
+        normalizedPathname === "/widget-frame" ||
+        normalizedPathname === "/api/auth/login" ||
+        normalizedPathname === "/auth/callback" ||
+        normalizedPathname === "/api/public/handoff" ||
+        (normalizedPathname === "/api/public/chat" &&
             (request.method === "POST" || request.method === "OPTIONS"))
     ) {
         return response;

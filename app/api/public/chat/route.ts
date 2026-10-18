@@ -128,6 +128,9 @@ export async function POST(request: Request) {
       );
       if (rateLimit.retryAfter) {
         response.headers.set("Retry-After", String(rateLimit.retryAfter));
+        if (response.headers.has("Access-Control-Allow-Origin")) {
+          response.headers.set("Access-Control-Expose-Headers", "Retry-After");
+        }
       }
       return response;
     }

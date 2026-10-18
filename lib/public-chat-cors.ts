@@ -1,14 +1,16 @@
-import { NextResponse } from "next/server";
 import {
   getAllowedPublicChatOrigin,
   isAllowedAssistantOrigin as isAllowedAssistantOriginValue,
-} from "./public-chat-origin";
+} from "./public-chat-origin.ts";
 
-function configuredOrigins(): Set<string> {
+export function getConfiguredPublicChatOrigins(
+  envAllowedOrigins = process.env.PUBLIC_CHAT_ALLOWED_ORIGINS,
+  nodeEnv = process.env.NODE_ENV,
+): Set<string> {
   const origins = new Set(
-    (process.env.PUBLIC_CHAT_ALLOWED_ORIGINS ?? "")
+    (envAllowedOrigins ?? "")
       .split(",")
-      .map((origin) => origin.trim())
+      .map((origin) => origin.trim().replace(/^["']|["']$/g, ""))
       .map((origin) => {
         try {
           return new URL(origin).origin;
@@ -18,10 +20,14 @@ function configuredOrigins(): Set<string> {
       })
       .filter(Boolean),
   );
-  if (process.env.NODE_ENV !== "production") {
+  if (nodeEnv !== "production") {
     origins.add("http://127.0.0.1:5500");
   }
   return origins;
+}
+
+function configuredOrigins(): Set<string> {
+  return getConfiguredPublicChatOrigins();
 }
 
 export function isAllowedAssistantOrigin(
@@ -50,16 +56,27 @@ export function hasDisallowedPublicChatOrigin(
   return Boolean(request.headers.get("origin")) && !getPublicChatCorsOrigin(request, allowedDomains);
 }
 
-export function withPublicChatCors(
+export function withPublicChatCors<T extends Response>(
   request: Request,
-  response: NextResponse,
+  response: T,
   allowedDomains?: string[] | null,
-): NextResponse {
+): T {
   const origin = getPublicChatCorsOrigin(request, allowedDomains);
-  response.headers.append("Vary", "Origin");
+  const currentVary = response.headers.get("Vary");
+  if (!currentVary) {
+    response.headers.set("Vary", "Origin");
+  } else {
+    const varyTokens = currentVary.split(",").map((token) => token.trim().toLowerCase());
+    if (!varyTokens.includes("origin")) {
+      response.headers.set("Vary", `${currentVary}, Origin`);
+    }
+  }
 
   if (origin) {
     response.headers.set("Access-Control-Allow-Origin", origin);
+    if (response.headers.has("Retry-After")) {
+      response.headers.set("Access-Control-Expose-Headers", "Retry-After");
+    }
   }
 
   return response;
@@ -70,16 +87,17 @@ export function publicChatJson(
   body: unknown,
   init?: ResponseInit,
   allowedDomains?: string[] | null,
-): NextResponse {
-  return withPublicChatCors(request, NextResponse.json(body, init), allowedDomains);
+): Response {
+  return withPublicChatCors(request, Response.json(body, init), allowedDomains);
 }
 
 export function publicChatOptions(
   request: Request,
   methods = "POST, OPTIONS",
-): NextResponse {
-  const response = new NextResponse(null, { status: 204 });
+): Response {
+  const response = new Response(null, { status: 204 });
   response.headers.set("Access-Control-Allow-Methods", methods);
   response.headers.set("Access-Control-Allow-Headers", "Content-Type");
+  response.headers.set("Access-Control-Max-Age", "86400");
   return withPublicChatCors(request, response);
 }
