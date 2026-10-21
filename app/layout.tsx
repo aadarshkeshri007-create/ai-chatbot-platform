@@ -86,9 +86,11 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-150">
-        <Script id="supportai-theme-init" strategy="beforeInteractive">
-          {themeScript}
-        </Script>
+        <Script
+          id="supportai-theme-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeScript }}
+        />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

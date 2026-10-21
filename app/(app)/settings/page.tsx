@@ -9,70 +9,40 @@ import {
     ASSISTANT_SETTINGS_LIMITS,
     DEFAULT_ASSISTANT_NAME,
     DEFAULT_BUSINESS_NAME,
+    DEFAULT_RESPONSE_LENGTH,
+    DEFAULT_RESPONSE_STYLE,
     DEFAULT_WELCOME_MESSAGE,
     MAX_SUGGESTED_QUESTIONS,
     getAssistantSettings,
     parseSuggestedQuestions,
 } from "@/lib/assistant-settings";
+import type { ResponseLength, ResponseStyle } from "@/lib/assistant-settings";
 import { normalizeAllowedDomainInput } from "@/lib/public-chat-origin";
+import { DEFAULT_BRAND_COLOR, getBrandTextColor, normalizeBrandColor } from "@/lib/brand-color";
 import PageFrame from "@/components/PageFrame";
 import PageHeader from "@/components/PageHeader";
 
 /* ── Types ─────────────────────────────────────── */
-
-type ResponseLength = "short" | "balanced" | "detailed";
-type ResponseStyle = "balanced" | "formal" | "friendly";
-
-function Toggle({
-    id,
-    checked,
-    onChange,
-    label,
-}: {
-    id: string;
-    checked: boolean;
-    onChange: (value: boolean) => void;
-    label: string;
-}) {
-    return (
-        <button
-            id={id}
-            type="button"
-            role="switch"
-            aria-checked={checked}
-            aria-label={label}
-            onClick={() => onChange(!checked)}
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${
-                checked ? "bg-teal-600 dark:bg-teal-500" : "bg-slate-200 dark:bg-slate-700"
-            }`}
-        >
-            <span
-                aria-hidden="true"
-                className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ${
-                    checked ? "translate-x-4" : "translate-x-0"
-                }`}
-            />
-        </button>
-    );
-}
 
 function RadioGroup<T extends string>({
     name,
     options,
     value,
     onChange,
+    disabled = false,
 }: {
     name: string;
     options: { value: T; label: string }[];
     value: T;
     onChange: (value: T) => void;
+    disabled?: boolean;
 }) {
     return (
         <div className="flex flex-wrap gap-1.5">
             {options.map((option) => (
                 <label
                     key={option.value}
-                    className={`relative inline-flex items-center cursor-pointer rounded-lg border px-2.5 py-1 text-xs font-medium transition-all duration-150 focus-within:ring-2 focus-within:ring-teal-500 focus-within:ring-offset-2 ${
+                    className={`relative inline-flex items-center cursor-pointer rounded-lg border px-2.5 py-1 text-xs font-medium transition-all duration-150 focus-within:ring-2 focus-within:ring-teal-500 focus-within:ring-offset-2 ${disabled ? "cursor-not-allowed opacity-60" : ""} ${
                         value === option.value
                             ? "border-teal-300 bg-teal-50 text-teal-700 shadow-sm dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-300"
                             : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-700/60"
@@ -83,6 +53,7 @@ function RadioGroup<T extends string>({
                         name={name}
                         value={option.value}
                         checked={value === option.value}
+                        disabled={disabled}
                         onChange={() => onChange(option.value)}
                         className="absolute inset-0 h-full w-full opacity-0"
                     />
@@ -99,13 +70,10 @@ export default function SettingsPage() {
 
     /* ── Local-only state ──────────────────────── */
     const [language] = useState("English");
-    const [responseStyle, setResponseStyle] = useState<ResponseStyle>("balanced");
+    const [responseStyle, setResponseStyle] = useState<ResponseStyle>(DEFAULT_RESPONSE_STYLE);
 
-    const [emailNotifications, setEmailNotifications] = useState(true);
-    const [productUpdates, setProductUpdates] = useState(false);
-
-    const [responseLength, setResponseLength] = useState<ResponseLength>("balanced");
-    const [useKnowledgeBase, setUseKnowledgeBase] = useState(true);
+    const [responseLength, setResponseLength] = useState<ResponseLength>(DEFAULT_RESPONSE_LENGTH);
+    const [responsePreferencesAvailable, setResponsePreferencesAvailable] = useState(true);
     const [businessName, setBusinessName] = useState(DEFAULT_BUSINESS_NAME);
     const [assistantName, setAssistantName] = useState(DEFAULT_ASSISTANT_NAME);
     const [welcomeMessage, setWelcomeMessage] = useState(DEFAULT_WELCOME_MESSAGE);
@@ -117,6 +85,8 @@ export default function SettingsPage() {
     const [allowedDomainsAvailable, setAllowedDomainsAvailable] = useState(true);
     const [allowedDomainsError, setAllowedDomainsError] = useState("");
     const [assistantId, setAssistantId] = useState<string | null>(null);
+    const [brandColor, setBrandColor] = useState(DEFAULT_BRAND_COLOR);
+    const [brandColorAvailable, setBrandColorAvailable] = useState(true);
     const [assistantIdError, setAssistantIdError] = useState("");
     const [assistantIdCopyStatus, setAssistantIdCopyStatus] = useState("");
     const [identityLoading, setIdentityLoading] = useState(true);
@@ -210,6 +180,34 @@ export default function SettingsPage() {
                 setAssistantId(profile.assistant_id);
             }
 
+            const { data: appearance, error: appearanceError } = await supabase
+                .from("profiles")
+                .select("brand_color")
+                .eq("id", user.id)
+                .maybeSingle();
+            if (isMissingSchemaFieldError(appearanceError)) {
+                setBrandColorAvailable(false);
+            } else if (appearanceError) {
+                logSupabaseError("Assistant brand color load error:", appearanceError);
+            } else {
+                setBrandColor(normalizeBrandColor(appearance?.brand_color) ?? DEFAULT_BRAND_COLOR);
+            }
+
+            const { data: responsePreferences, error: preferencesError } = await supabase
+                .from("profiles")
+                .select("response_style, response_length")
+                .eq("id", user.id)
+                .maybeSingle();
+            if (isMissingSchemaFieldError(preferencesError)) {
+                setResponsePreferencesAvailable(false);
+            } else if (preferencesError) {
+                logSupabaseError("Assistant response preferences load error:", preferencesError);
+            } else {
+                const preferences = getAssistantSettings(responsePreferences);
+                setResponseStyle(preferences.responseStyle);
+                setResponseLength(preferences.responseLength);
+            }
+
             setIdentityLoading(false);
         };
 
@@ -288,6 +286,11 @@ export default function SettingsPage() {
         }
 
         const normalizedAllowedDomains = [...new Set(nextAllowedDomains)] as string[];
+        const nextBrandColor = normalizeBrandColor(brandColor);
+        if (!nextBrandColor) {
+            setIdentityError("Choose a valid brand color.");
+            return;
+        }
 
         if (!nextBusinessName || !nextAssistantName || !nextWelcomeMessage) {
             setIdentityError("All assistant identity fields are required.");
@@ -331,6 +334,11 @@ export default function SettingsPage() {
                 assistant_name: nextAssistantName,
                 welcome_message: nextWelcomeMessage,
                 custom_instructions: nextCustomInstructions,
+                ...(brandColorAvailable ? { brand_color: nextBrandColor } : {}),
+                ...(responsePreferencesAvailable ? {
+                    response_style: responseStyle,
+                    response_length: responseLength,
+                } : {}),
                 ...(suggestedQuestionsAvailable
                     ? { suggested_questions: nextSuggestedQuestions }
                     : {}),
@@ -365,7 +373,12 @@ export default function SettingsPage() {
             setCustomInstructions(nextCustomInstructions);
             setSuggestedQuestions(nextSuggestedQuestions);
             setAllowedDomains(normalizedAllowedDomains);
-            setIdentitySuccess("Assistant settings saved.");
+            setBrandColor(nextBrandColor);
+            setIdentitySuccess(
+                !brandColorAvailable || !responsePreferencesAvailable
+                    ? "Available assistant settings saved. Apply the widget settings migration to save brand color and response preferences."
+                    : "Assistant settings saved.",
+            );
         }
 
         setIdentitySaving(false);
@@ -406,18 +419,39 @@ export default function SettingsPage() {
                         </div>
                         <div className="sm:col-span-2">
                             <label htmlFor="custom-instructions" className="text-xs font-medium text-slate-700 dark:text-slate-300">Custom Instructions</label>
-                            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">Tell the assistant how it should behave when answering customers.</p>
+                            <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">Controls business-specific behavior. Response style controls presentation; grounding and safety rules always take precedence.</p>
                             <textarea id="custom-instructions" value={customInstructions} onChange={(event) => setCustomInstructions(event.target.value)} maxLength={ASSISTANT_SETTINGS_LIMITS.customInstructions} rows={4} className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100" />
-                            <p className="mt-1 text-right text-[11px] text-slate-400 dark:text-slate-500">{customInstructions.length}/{ASSISTANT_SETTINGS_LIMITS.customInstructions}</p>
+                            <p className="mt-1 text-right text-[11px] text-slate-600 dark:text-slate-300">{customInstructions.length}/{ASSISTANT_SETTINGS_LIMITS.customInstructions}</p>
+                        </div>
+                        <div className="sm:col-span-2 mt-1 border-t border-slate-100 pt-3 dark:border-slate-800">
+                            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                                <div>
+                                    <label htmlFor="assistant-brand-color" className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-200">Widget brand color</label>
+                                    <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">One color sets the launcher, widget header, customer bubbles, and primary actions.</p>
+                                    {!brandColorAvailable && <p role="status" className="mt-1 text-xs text-amber-700 dark:text-amber-300">Apply the brand color migration to save this setting. The default color remains active until then.</p>}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <input id="assistant-brand-color" type="color" value={brandColor} onChange={(event) => setBrandColor(event.target.value)} disabled={!brandColorAvailable} aria-label="Widget brand color" className="h-11 w-14 cursor-pointer rounded-md border border-slate-300 bg-white p-1 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800" />
+                                    <code className="text-sm font-medium text-slate-700 dark:text-slate-200">{brandColor}</code>
+                                </div>
+                            </div>
+                            <div className="mt-4 flex max-w-md overflow-hidden rounded-xl border border-slate-200 shadow-sm dark:border-slate-700" aria-label="Widget brand preview">
+                                <div className="flex-1 bg-white p-3 dark:bg-slate-900">
+                                    <div className="-mx-3 -mt-3 mb-3 px-3 py-2 text-sm font-semibold" style={{ backgroundColor: brandColor, color: getBrandTextColor(brandColor) }}>Your Assistant</div>
+                                    <div className="mb-2 w-fit rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200">How can I help?</div>
+                                    <div className="ml-auto w-fit rounded-xl px-3 py-2 text-xs" style={{ backgroundColor: brandColor, color: getBrandTextColor(brandColor) }}>Track my order</div>
+                                    <div className="mt-2 flex justify-end"><span className="rounded-full px-3 py-1.5 text-xs font-semibold shadow" style={{ backgroundColor: brandColor, color: getBrandTextColor(brandColor) }}>●</span></div>
+                                </div>
+                            </div>
                         </div>
                         <div className="sm:col-span-2 mt-1 border-t border-slate-100 pt-3 dark:border-slate-800">
                             <div className="flex items-baseline justify-between gap-3">
                                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Suggested Questions</h3>
                                 {suggestedQuestionsAvailable && (
-                                    <span className="text-[11px] text-slate-400 dark:text-slate-500">{suggestedQuestions.length}/{MAX_SUGGESTED_QUESTIONS}</span>
+                                    <span className="text-[11px] text-slate-600 dark:text-slate-300">{suggestedQuestions.length}/{MAX_SUGGESTED_QUESTIONS}</span>
                                 )}
                             </div>
-                            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                            <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
                                 Show up to {MAX_SUGGESTED_QUESTIONS} questions in your chat before a customer types. Defaults are shown when none are saved.
                             </p>
                             {!suggestedQuestionsAvailable && (
@@ -464,7 +498,7 @@ export default function SettingsPage() {
                             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                                 Allowed Domains
                             </h3>
-                            <p className="mt-1 text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">
+                            <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
                                 Restrict this assistant to exact website hostnames, such as support.example.com.
                                 Subdomains are not automatically included. Leave the list empty to disable
                                 assistant-specific domain restrictions; global origin restrictions still apply.
@@ -501,7 +535,7 @@ export default function SettingsPage() {
                                             + Add domain
                                         </button>
                                     </div>
-                                    <p id="allowed-domains-help" className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                                    <p id="allowed-domains-help" className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">
                                         Enter a hostname only — no scheme, path, port, credentials, wildcard, or suffix matching.
                                     </p>
                                     {allowedDomains.length > 0 && (
@@ -610,7 +644,7 @@ export default function SettingsPage() {
                                         <label className="font-medium text-slate-700 dark:text-slate-300">
                                             Theme
                                         </label>
-                                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-300">
                                             Preferred appearance
                                         </p>
                                     </div>
@@ -632,7 +666,7 @@ export default function SettingsPage() {
                                         <label className="font-medium text-slate-700 dark:text-slate-300">
                                             Language
                                         </label>
-                                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-300">
                                             Interface language
                                         </p>
                                     </div>
@@ -647,14 +681,16 @@ export default function SettingsPage() {
                                         <label className="font-medium text-slate-700 dark:text-slate-300">
                                             Response style
                                         </label>
-                                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                                            AI assistant tone
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                                            Presentation tone; custom instructions control business-specific behavior.
                                         </p>
+                                        {!responsePreferencesAvailable && <p role="status" className="mt-1 text-xs text-amber-700 dark:text-amber-300">Apply the widget settings migration to save response preferences.</p>}
                                     </div>
                                     <RadioGroup<ResponseStyle>
                                         name="response-style"
                                         value={responseStyle}
                                         onChange={setResponseStyle}
+                                        disabled={!responsePreferencesAvailable}
                                         options={[
                                             { value: "formal", label: "Formal" },
                                             { value: "balanced", label: "Balanced" },
@@ -673,47 +709,9 @@ export default function SettingsPage() {
                                 </h2>
                             </div>
 
-                            <div className="divide-y divide-[var(--border)] text-sm">
-                                <div className="flex items-center justify-between px-4 py-2.5">
-                                    <div>
-                                        <label
-                                            htmlFor="toggle-email-notifications"
-                                            className="font-medium text-slate-700 dark:text-slate-300"
-                                        >
-                                            Email notifications
-                                        </label>
-                                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                                            Conversation updates
-                                        </p>
-                                    </div>
-                                    <Toggle
-                                        id="toggle-email-notifications"
-                                        checked={emailNotifications}
-                                        onChange={setEmailNotifications}
-                                        label="Toggle email notifications"
-                                    />
-                                </div>
-
-                                <div className="flex items-center justify-between px-4 py-2.5">
-                                    <div>
-                                        <label
-                                            htmlFor="toggle-product-updates"
-                                            className="font-medium text-slate-700 dark:text-slate-300"
-                                        >
-                                            Product updates
-                                        </label>
-                                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                                            Feature announcements
-                                        </p>
-                                    </div>
-                                    <Toggle
-                                        id="toggle-product-updates"
-                                        checked={productUpdates}
-                                        onChange={setProductUpdates}
-                                        label="Toggle product updates"
-                                    />
-                                </div>
-                            </div>
+                            <p className="text-sm text-slate-600 dark:text-slate-300">
+                                Notification preferences are not available yet.
+                            </p>
                         </section>
                     </div>
 
@@ -733,14 +731,16 @@ export default function SettingsPage() {
                                         <label className="font-medium text-slate-700 dark:text-slate-300">
                                             Response length
                                         </label>
-                                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                                            Detail level of answers
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                                            Controls answer detail; knowledge grounding stays enabled.
                                         </p>
+                                        {!responsePreferencesAvailable && <p role="status" className="mt-1 text-xs text-amber-700 dark:text-amber-300">Apply the widget settings migration to save response preferences.</p>}
                                     </div>
                                     <RadioGroup<ResponseLength>
                                         name="response-length"
                                         value={responseLength}
                                         onChange={setResponseLength}
+                                        disabled={!responsePreferencesAvailable}
                                         options={[
                                             { value: "short", label: "Short" },
                                             { value: "balanced", label: "Balanced" },
@@ -749,24 +749,9 @@ export default function SettingsPage() {
                                     />
                                 </div>
 
-                                <div className="flex items-center justify-between px-4 py-2.5">
-                                    <div>
-                                        <label
-                                            htmlFor="toggle-knowledge-base"
-                                            className="font-medium text-slate-700 dark:text-slate-300"
-                                        >
-                                            Use knowledge base
-                                        </label>
-                                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                                            Reference uploaded files
-                                        </p>
-                                    </div>
-                                    <Toggle
-                                        id="toggle-knowledge-base"
-                                        checked={useKnowledgeBase}
-                                        onChange={setUseKnowledgeBase}
-                                        label="Toggle knowledge base usage"
-                                    />
+                                <div className="px-4 py-3 text-sm">
+                                    <p className="font-medium text-slate-700 dark:text-slate-300">Knowledge grounding</p>
+                                    <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300">Always enabled. Unsupported business-specific answers are declined.</p>
                                 </div>
                             </div>
                         </section>
@@ -785,7 +770,7 @@ export default function SettingsPage() {
                                     className="flex items-center justify-between px-4 py-2.5 text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
                                 >
                                     <span className="flex items-center gap-2 font-medium">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-slate-400 dark:text-slate-500">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-slate-600 dark:text-slate-300">
                                             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                                             <circle cx="12" cy="7" r="4" />
                                         </svg>

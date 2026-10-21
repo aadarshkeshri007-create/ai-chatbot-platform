@@ -1,6 +1,10 @@
 export const DEFAULT_BUSINESS_NAME = "Your Business";
 export const DEFAULT_ASSISTANT_NAME = "AI Support";
 export const DEFAULT_WELCOME_MESSAGE = "Hello! How can I assist you today?";
+export type ResponseStyle = "formal" | "balanced" | "friendly";
+export type ResponseLength = "short" | "balanced" | "detailed";
+export const DEFAULT_RESPONSE_STYLE: ResponseStyle = "balanced";
+export const DEFAULT_RESPONSE_LENGTH: ResponseLength = "balanced";
 
 // Shown in the chat empty state until the business configures its own questions.
 export const DEFAULT_SUGGESTED_QUESTIONS = [
@@ -25,6 +29,8 @@ type AssistantSettingsRow = {
   welcome_message?: string | null;
   custom_instructions?: string | null;
   suggested_questions?: unknown;
+  response_style?: unknown;
+  response_length?: unknown;
 };
 
 const valueOrFallback = (value: string | null | undefined, fallback: string) =>
@@ -64,5 +70,11 @@ export function getAssistantSettings(settings?: AssistantSettingsRow | null) {
     ),
     customInstructions: settings?.custom_instructions?.trim() || "",
     suggestedQuestions: resolveSuggestedQuestions(settings?.suggested_questions),
+    responseStyle: settings?.response_style === "formal" || settings?.response_style === "friendly"
+      ? settings.response_style
+      : DEFAULT_RESPONSE_STYLE,
+    responseLength: settings?.response_length === "short" || settings?.response_length === "detailed"
+      ? settings.response_length
+      : DEFAULT_RESPONSE_LENGTH,
   };
 }

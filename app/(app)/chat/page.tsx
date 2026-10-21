@@ -23,12 +23,20 @@ import type { Message } from "@/types/message";
 import { useSidebarContext } from "@/components/SidebarContext";
 import ChatMessages from "@/components/chat/ChatMessage";
 import ChatInput from "@/components/chat/ChatInput";
+import OnboardingChecklist from "@/components/OnboardingChecklist";
+import FeedbackReviewPanel from "@/components/chat/FeedbackReviewPanel";
+import { getConversationLoadErrorMessage, normalizeOwnedTestConversations, UNAUTHENTICATED_CONVERSATION_MESSAGE } from "@/lib/conversation-load";
+import { getSafeChatFailureCode, getSafeChatFailureMessage } from "@/lib/chat-errors";
+import { finishChatRequest, tryStartChatRequest } from "@/lib/chat-request-guard";
+import { shouldAutoScrollToBottom } from "@/lib/chat-scroll";
 
 const BOTTOM_THRESHOLD_PX = 24;
 
 type ChatSource = {
     documentId: string;
     fileName: string;
+    chunkId?: string;
+    chunkIndex?: number;
 };
 
 export default function ChatPage() {
@@ -39,20 +47,21 @@ export default function ChatPage() {
     const [conversationId, setConversationId] =
         useState<string | null>(null);
 
-    const [sources, setSources] =
-        useState<ChatSource[]>([]);
     const [assistantName, setAssistantName] = useState(DEFAULT_ASSISTANT_NAME);
     const [welcomeMessage, setWelcomeMessage] = useState(DEFAULT_WELCOME_MESSAGE);
     const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([
         ...DEFAULT_SUGGESTED_QUESTIONS,
     ]);
     const [assistantSettingsLoading, setAssistantSettingsLoading] = useState(true);
+    const [conversationLoadError, setConversationLoadError] = useState<string | null>(null);
+    const [conversationListLoading, setConversationListLoading] = useState(true);
 
     const messagesContainerRef =
         useRef<HTMLElement | null>(null);
 
     const shouldAutoScrollRef =
         useRef(true);
+    const chatRequestLockRef = useRef({ current: false });
 
     const [messages, setMessages] =
         useState<Message[]>([
@@ -96,14 +105,12 @@ export default function ChatPage() {
                 return;
             }
 
-            const distanceFromBottom =
-                container.scrollHeight -
-                container.scrollTop -
-                container.clientHeight;
-
-            shouldAutoScrollRef.current =
-                distanceFromBottom <=
-                BOTTOM_THRESHOLD_PX;
+            shouldAutoScrollRef.current = shouldAutoScrollToBottom(
+                container.scrollHeight,
+                container.scrollTop,
+                container.clientHeight,
+                BOTTOM_THRESHOLD_PX,
+            );
         }, []);
 
     useLayoutEffect(() => {
@@ -165,35 +172,72 @@ export default function ChatPage() {
         loadAssistantSettings();
     }, []);
 
-    // Load the user's conversations
-    useEffect(() => {
-        const loadConversations = async () => {
+    // Load only the signed-in owner's test conversations for their assistant.
+    const loadConversations = useCallback(async () => {
+        setConversationListLoading(true);
+        setConversationLoadError(null);
+        try {
             const supabase = createClient();
-
-            const { data, error } =
-                await supabase
-                    .from("conversations")
-                    .select(
-                        "id, title, updated_at",
-                    )
-                    .order("updated_at", {
-                        ascending: false,
-                    });
-
-            if (error) {
-                console.error(
-                    "Error loading conversations:",
-                    error,
-                );
-
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            if (authError) {
+                logSupabaseError("Chat conversation auth error:", authError);
+                setConversationLoadError(UNAUTHENTICATED_CONVERSATION_MESSAGE);
+                return;
+            }
+            if (!user) {
+                setConversationLoadError(UNAUTHENTICATED_CONVERSATION_MESSAGE);
                 return;
             }
 
-            setConversations(data ?? []);
-        };
+            const { data: profile, error: profileError } = await supabase
+                .from("profiles")
+                .select("assistant_id")
+                .eq("id", user.id)
+                .maybeSingle();
+            if (profileError) {
+                logSupabaseError("Chat conversation profile error:", profileError);
+                setConversationLoadError("We couldn’t load your assistant workspace. Retry in a moment.");
+                return;
+            }
+            if (!profile?.assistant_id) {
+                setConversationLoadError("Your assistant workspace isn’t ready yet. Retry in a moment.");
+                return;
+            }
 
-        loadConversations();
+            const { data, error } = await supabase
+                .from("conversations")
+                .select("id, title, updated_at, user_id, assistant_id, is_test")
+                .eq("user_id", user.id)
+                .eq("assistant_id", profile.assistant_id)
+                .eq("is_test", true)
+                .order("updated_at", { ascending: false });
+
+            if (error) {
+                logSupabaseError("Chat conversation list error:", error);
+                setConversationLoadError(getConversationLoadErrorMessage(error));
+                return;
+            }
+            const conversations = normalizeOwnedTestConversations(data, user.id, profile.assistant_id);
+            if (!conversations) {
+                console.error("Chat conversation list returned an invalid response shape.");
+                setConversationLoadError("We received an unexpected response while loading conversations. Retry.");
+                return;
+            }
+            setConversations(conversations);
+        } catch (error) {
+            const safeError = error instanceof Error
+                ? { name: error.name }
+                : { name: "UnknownError" };
+            console.error("Chat conversation list request failed:", JSON.stringify(safeError));
+            setConversationLoadError("We couldn’t load saved test conversations. Check your connection and retry.");
+        } finally {
+            setConversationListLoading(false);
+        }
     }, [setConversations]);
+
+    useEffect(() => {
+        queueMicrotask(() => void loadConversations());
+    }, [loadConversations]);
 
     // Sync active conversation ID to context
     useEffect(() => {
@@ -214,7 +258,6 @@ export default function ChatPage() {
         ]);
 
         setMessage("");
-        setSources([]);
         shouldAutoScrollRef.current = true;
     }, [welcomeMessage]);
 
@@ -271,7 +314,6 @@ export default function ChatPage() {
                 ]);
 
                 setMessage("");
-                setSources([]);
                 shouldAutoScrollRef.current =
                     true;
             }
@@ -291,7 +333,6 @@ export default function ChatPage() {
             );
 
             setLoading(true);
-            setSources([]);
 
             try {
                 const supabase =
@@ -301,7 +342,7 @@ export default function ChatPage() {
                     await supabase
                         .from("messages")
                         .select(
-                            "id, role, content",
+                            "id, role, content, sources",
                         )
                         .eq(
                             "conversation_id",
@@ -325,6 +366,8 @@ export default function ChatPage() {
                             role: msg.role,
                             content:
                                 msg.content,
+                            sources: Array.isArray(msg.sources) ? msg.sources as Message["sources"] : [],
+                            retrievalState: Array.isArray(msg.sources) && msg.sources.length > 0 ? "supported" : "insufficient",
                         }),
                     ),
                 );
@@ -393,17 +436,41 @@ export default function ChatPage() {
             setMessage(text);
         };
 
+    const submitAnswerFeedback = async (
+        assistant: Message,
+        question: Message,
+        feedbackType: "helpful" | "not_helpful" | "report_issue",
+        category?: string,
+    ) => {
+        if (!conversationId) throw new Error("Wait until the test response has been saved before sending feedback.");
+        const response = await fetch("/api/chat/feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                conversationId,
+                userMessageId: question.id,
+                assistantMessageId: assistant.id,
+                requestId: generateClientUuid(),
+                feedbackType,
+                category,
+            }),
+        });
+        const result = await response.json().catch(() => null) as { error?: string } | null;
+        if (!response.ok) throw new Error(result?.error || "Unable to save feedback.");
+    };
+
     const handleSendMessage = async () => {
-        if (!message.trim() || loading) {
+        if (!message.trim() || loading || !tryStartChatRequest(chatRequestLockRef.current)) {
             return;
         }
 
         const userMessage = message;
 
+        let userMessageId: string;
         let assistantMessageId: string;
 
         try {
-            const userMessageId = generateClientUuid();
+            userMessageId = generateClientUuid();
             assistantMessageId = generateClientUuid();
 
             setMessages((prevMessages) => [
@@ -420,12 +487,11 @@ export default function ChatPage() {
                 },
             ]);
         } catch (error) {
-            console.error("Unable to create chat message identifiers:", error);
+            console.error("Unable to create chat message identifiers:", JSON.stringify({ name: error instanceof Error ? error.name : "UnknownError" }));
             setChatError(
-                error instanceof Error
-                    ? error.message
-                    : "Unable to start the chat. Please use a supported browser.",
+                "Unable to start the chat. Please use a supported browser.",
             );
+            finishChatRequest(chatRequestLockRef.current);
             return;
         }
 
@@ -434,7 +500,6 @@ export default function ChatPage() {
 
         setLoading(true);
         setMessage("");
-        setSources([]);
 
         try {
             const response = await fetch(
@@ -448,6 +513,8 @@ export default function ChatPage() {
                     body: JSON.stringify({
                         message: userMessage,
                         conversationId,
+                        userMessageId,
+                        assistantMessageId,
                     }),
                 },
             );
@@ -465,52 +532,22 @@ export default function ChatPage() {
                         typeof errorData.error ===
                             "string"
                     ) {
-                        errorMessage =
-                            errorData.error;
+                        errorMessage = getSafeChatFailureMessage(new Error(errorData.error));
+                    }
+                    if (errorData?.code === "DEADLINE_EXCEEDED") {
+                        errorMessage = getSafeChatFailureMessage({ status: 504 });
                     }
                 } catch {
                     // Ignore JSON parsing errors.
                 }
 
+                if (response.status === 504) {
+                    errorMessage = getSafeChatFailureMessage({ status: 504 });
+                }
+
                 throw new Error(
                     errorMessage,
                 );
-            }
-
-            /*
-             * Get source metadata from the
-             * response header.
-             */
-
-            const sourcesHeader =
-                response.headers.get(
-                    "X-Chat-Sources",
-                );
-
-            if (sourcesHeader) {
-                try {
-                    const parsedSources =
-                        JSON.parse(
-                            sourcesHeader,
-                        );
-
-                    if (
-                        Array.isArray(
-                            parsedSources,
-                        )
-                    ) {
-                        setSources(
-                            parsedSources,
-                        );
-                    }
-                } catch (error) {
-                    console.error(
-                        "Failed to parse chat sources:",
-                        error,
-                    );
-
-                    setSources([]);
-                }
             }
 
             /*
@@ -583,6 +620,8 @@ export default function ChatPage() {
                 new TextDecoder();
 
             let pendingContent = "";
+            let streamBuffer = "";
+            let streamComplete = false;
 
             let updateFrame:
                 | number
@@ -618,34 +657,48 @@ export default function ChatPage() {
                     );
                 };
 
+            const processEvent = (block: string) => {
+                let eventName = "message";
+                const dataLines: string[] = [];
+                for (const line of block.split("\n")) {
+                    if (line.startsWith("event:")) eventName = line.slice(6).trim();
+                    else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+                }
+                if (!dataLines.length) return;
+                const payload = JSON.parse(dataLines.join("\n")) as Record<string, unknown>;
+                if (eventName === "delta" && typeof payload.text === "string") {
+                    pendingContent += payload.text;
+                    if (updateFrame === null) updateFrame = requestAnimationFrame(flushPendingContent);
+                } else if (eventName === "complete") {
+                    streamComplete = true;
+                    const completedSources = Array.isArray(payload.sources) ? payload.sources as ChatSource[] : [];
+                    if (typeof payload.userMessageId === "string" && typeof payload.assistantMessageId === "string") {
+                        setMessages((current) => current.map((item) =>
+                            item.id === userMessageId ? { ...item, id: payload.userMessageId as string } :
+                            item.id === assistantMessageId ? {
+                                ...item,
+                                id: payload.assistantMessageId as string,
+                                sources: completedSources.map((source) => ({ label: source.fileName, document_id: source.documentId, chunk_id: source.chunkId, chunk_index: source.chunkIndex })),
+                                retrievalState: payload.retrievalState === "supported" ? "supported" : "insufficient",
+                            } : item));
+                    }
+                } else if (eventName === "error") {
+                    const error = new Error(getSafeChatFailureMessage(payload)) as Error & { chatFailureCode: string };
+                    error.chatFailureCode = getSafeChatFailureCode(payload);
+                    throw error;
+                }
+            };
+
             while (true) {
-                const { done, value } =
-                    await reader.read();
-
-                if (done) {
-                    break;
-                }
-
-                pendingContent +=
-                    decoder.decode(
-                        value,
-                        {
-                            stream: true,
-                        },
-                    );
-
-                if (
-                    updateFrame === null
-                ) {
-                    updateFrame =
-                        requestAnimationFrame(
-                            flushPendingContent,
-                        );
-                }
+                const { done, value } = await reader.read();
+                if (done) break;
+                streamBuffer += decoder.decode(value, { stream: true });
+                const blocks = streamBuffer.split("\n\n");
+                streamBuffer = blocks.pop() ?? "";
+                for (const block of blocks) processEvent(block);
             }
-
-            pendingContent +=
-                decoder.decode();
+            streamBuffer += decoder.decode();
+            if (streamBuffer.trim()) processEvent(streamBuffer);
 
             if (
                 updateFrame !== null
@@ -656,30 +709,22 @@ export default function ChatPage() {
             }
 
             flushPendingContent();
+            if (!streamComplete) throw new Error("The assistant stream ended before completion. Please retry.");
 
             /*
              * Refresh the conversation list.
              */
 
-            const supabase =
-                createClient();
-
-            const { data } =
-                await supabase
-                    .from("conversations")
-                    .select(
-                        "id, title, updated_at",
-                    )
-                    .order(
-                        "updated_at",
-                        {
-                            ascending: false,
-                        },
-                    );
-
-            setConversations(data ?? []);
+            void loadConversations();
         } catch (error) {
-            console.error(error);
+            const safeFailureMessage = getSafeChatFailureMessage(error);
+            console.error("Chat submission failed:", JSON.stringify({
+                name: error instanceof Error ? error.name : "UnknownError",
+                code: error && typeof error === "object" && "chatFailureCode" in error
+                    ? (error as { chatFailureCode?: string }).chatFailureCode
+                    : getSafeChatFailureCode(error),
+            }));
+            setChatError(safeFailureMessage);
 
             setMessages(
                 (prevMessages) =>
@@ -690,18 +735,37 @@ export default function ChatPage() {
                                 ? {
                                       ...msg,
                                       content:
-                                          "Something went wrong. Please try again.",
+                                          safeFailureMessage,
                                   }
                                 : msg,
                     ),
             );
         } finally {
             setLoading(false);
+            finishChatRequest(chatRequestLockRef.current);
         }
     };
 
     return (
         <>
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-1.5 sm:px-6">
+                <div className="flex min-w-0 items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-[var(--text-primary)]">Test your assistant</p>
+                    <span title="Test sessions are kept separate from visitor conversations." className="shrink-0 rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)]"><span className="hidden sm:inline">Private test session</span><span className="sm:hidden">Private</span></span>
+                </div>
+                <FeedbackReviewPanel />
+            </div>
+            <OnboardingChecklist />
+            {conversationLoadError && (
+                <div role="alert" className="shrink-0 border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 sm:px-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p>{conversationLoadError}</p>
+                        <button type="button" onClick={() => void loadConversations()} disabled={conversationListLoading} className="rounded-md border border-current px-3 py-1.5 font-medium disabled:cursor-not-allowed disabled:opacity-60">
+                            {conversationListLoading ? "Retrying…" : "Retry"}
+                        </button>
+                    </div>
+                </div>
+            )}
             <ChatMessages
                 messages={messages}
                 messagesContainerRef={
@@ -718,33 +782,8 @@ export default function ChatPage() {
                 welcomeMessage={welcomeMessage}
                 suggestions={suggestedQuestions}
                 assistantSettingsLoading={assistantSettingsLoading}
+                onFeedback={submitAnswerFeedback}
             />
-
-            {sources.length > 0 && (
-                <div className="shrink-0 border-t border-slate-200 bg-white px-3 py-2.5 sm:px-6 sm:py-3 dark:border-slate-800 dark:bg-slate-900 transition-colors duration-150">
-                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        Sources
-                    </p>
-
-                    <div className="mt-2 flex gap-1.5 overflow-x-auto scrollbar-thin pb-0.5 sm:gap-2">
-                        {sources.map(
-                            (source) => (
-                                <span
-                                    key={
-                                        source.documentId
-                                    }
-                                    className="whitespace-nowrap rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:border dark:border-slate-700/50"
-                                >
-                                    📄{" "}
-                                    {
-                                        source.fileName
-                                    }
-                                </span>
-                            ),
-                        )}
-                    </div>
-                </div>
-            )}
 
             {chatError && (
                 <p

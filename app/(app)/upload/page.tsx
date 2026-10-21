@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { generateClientUuid } from "@/lib/client-uuid";
+import { getDocumentLoadDiagnostics, getDocumentLoadUserMessage } from "@/lib/document-load-error";
 import PageFrame from "@/components/PageFrame";
 import PageHeader from "@/components/PageHeader";
 
@@ -14,6 +15,10 @@ type Document = {
   file_size: number;
   status: string;
   created_at: string;
+  chunk_count: number | null;
+  processed_at: string | null;
+  extraction_preview: string | null;
+  processing_error: string | null;
 };
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -36,6 +41,8 @@ const formatFileSize = (bytes: number) => {
 
 export default function UploadPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [documentsLoadState, setDocumentsLoadState] = useState<"loading" | "loaded" | "error">("loading");
+  const [documentsLoadError, setDocumentsLoadError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(
     null,
@@ -48,37 +55,40 @@ export default function UploadPage() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    const loadDocuments = async () => {
+  const loadDocuments = useCallback(async () => {
+    try {
       const supabase = createClient();
-
       const { data, error } = await supabase
         .from("documents")
         .select(
-          "id, file_name, file_path, file_type, file_size, status, created_at",
+          "id, file_name, file_path, file_type, file_size, status, created_at, chunk_count, processed_at, extraction_preview, processing_error",
         )
         .order("created_at", {
           ascending: false,
         });
 
       if (error) {
-        console.error(
-          "Error loading documents:",
-          error,
-        );
-
-        setError(
-          "Unable to load your documents.",
-        );
-
+        const diagnostics = getDocumentLoadDiagnostics(error);
+        console.error("[documents.list] load-failed", diagnostics);
+        setDocumentsLoadError(getDocumentLoadUserMessage(error));
+        setDocumentsLoadState("error");
         return;
       }
 
       setDocuments(data ?? []);
-    };
-
-    loadDocuments();
+      setDocumentsLoadState("loaded");
+    } catch (loadError) {
+      console.error("[documents.list] unexpected-load-failure", getDocumentLoadDiagnostics(loadError));
+      setDocumentsLoadError(getDocumentLoadUserMessage(loadError));
+      setDocumentsLoadState("error");
+    }
   }, []);
+
+  useEffect(() => {
+    // This effect synchronizes the page with Supabase; state updates occur only after the async request settles.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadDocuments();
+  }, [loadDocuments]);
 
   const handleFileSelect = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -266,7 +276,7 @@ export default function UploadPage() {
         await supabase
           .from("documents")
           .select(
-            "id, file_name, file_path, file_type, file_size, status, created_at",
+            "id, file_name, file_path, file_type, file_size, status, created_at, chunk_count, processed_at, extraction_preview, processing_error",
           )
           .order("created_at", {
             ascending: false,
@@ -572,7 +582,25 @@ export default function UploadPage() {
             Documents
           </h2>
 
-          {documents.length === 0 ? (
+          {documentsLoadState === "loading" ? (
+            <p role="status" aria-live="polite" className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+              Loading your documents...
+            </p>
+          ) : documentsLoadState === "error" ? (
+            <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-5 py-5 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+              <p>{documentsLoadError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setDocumentsLoadState("loading");
+                  void loadDocuments();
+                }}
+                className="mt-3 min-h-[44px] rounded-lg border border-red-300 px-4 py-2 font-medium transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-red-800 dark:hover:bg-red-950"
+              >
+                Retry loading documents
+              </button>
+            </div>
+          ) : documents.length === 0 ? (
             <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
               No documents uploaded yet.
             </div>
@@ -596,10 +624,15 @@ export default function UploadPage() {
                           </p>
 
                           <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                            {formatFileSize(
-                              document.file_size,
-                            )}
+                            {formatFileSize(document.file_size)} · {document.file_type || "Unknown file type"}
                           </p>
+
+                          {document.status === "processed" && (
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                              {typeof document.chunk_count === "number" ? `${document.chunk_count} chunks` : "Chunk count unavailable"}
+                              {document.processed_at && ` · Processed ${new Date(document.processed_at).toLocaleString()}`}
+                            </p>
+                          )}
 
                           {document.status ===
                             "processing" && (
@@ -623,9 +656,16 @@ export default function UploadPage() {
                           {document.status ===
                             "failed" && (
                               <p className="mt-2 text-xs text-red-500 dark:text-red-400">
-                                Processing failed. You can retry.
+                                {document.processing_error || "Processing failed. You can retry."}
                               </p>
                             )}
+
+                          {document.status === "processed" && document.extraction_preview && (
+                            <details className="mt-2 max-w-2xl rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-700">
+                              <summary className="cursor-pointer font-medium text-slate-600 dark:text-slate-300">View extracted text preview</summary>
+                              <p className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-slate-500 dark:text-slate-400">{document.extraction_preview}</p>
+                            </details>
+                          )}
                         </div>
                       </div>
 

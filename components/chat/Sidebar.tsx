@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useTheme } from "@/components/ThemeProvider";
 
 type Conversation = {
     id: string;
@@ -24,7 +23,7 @@ type SidebarProps = {
 };
 
 /*
- * ── Navigation items ─────────────────────────────────
+ * â”€â”€ Navigation items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  */
 
 const MAIN_NAV_ITEMS: {
@@ -102,6 +101,16 @@ const BOTTOM_NAV_ITEMS: {
             </svg>
         ),
     },
+    {
+        label: "Install Widget",
+        href: "/install",
+        icon: (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M7 8h10M7 12h5M7 16h3" />
+            </svg>
+        ),
+    },
 ];
 
 export default function Sidebar({
@@ -117,7 +126,6 @@ export default function Sidebar({
 }: SidebarProps) {
     const pathname = usePathname();
     const isOnChatPage = pathname === "/chat";
-    const { resolvedTheme, toggleTheme } = useTheme();
     const sidebarRef = useRef<HTMLElement>(null);
 
     /* Close on Escape key */
@@ -179,14 +187,14 @@ export default function Sidebar({
                     collapsed ? "w-72 max-w-[calc(100vw-3rem)] lg:max-w-none lg:w-16" : "w-72 max-w-[calc(100vw-3rem)] lg:max-w-none"
                 }`}
             >
-                {/* ── Header: Brand & Collapse Toggle ──────────────── */}
+                {/* â”€â”€ Header: Brand & Collapse Toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
                 <div className={`flex items-center justify-between pt-4 pb-2 ${collapsed ? "px-3 lg:px-2 lg:justify-center" : "px-4"}`}>
                     {/* Brand */}
                     <Link
                         href="/chat"
                         className={`flex items-center group/brand ${collapsed ? "gap-0 lg:justify-center" : "gap-2.5"}`}
                         onClick={onClose}
-                        title={collapsed ? "SupportAI — Go to home" : undefined}
+                        title={collapsed ? "SupportAI â€” Go to home" : undefined}
                         aria-label="SupportAI Home"
                     >
                         <div
@@ -217,7 +225,7 @@ export default function Sidebar({
                         </svg>
                     </button>
 
-                    {/* Mobile close button — 44px min touch target */}
+                    {/* Mobile close button â€” 44px min touch target */}
                     <button
                         type="button"
                         onClick={onClose}
@@ -231,7 +239,7 @@ export default function Sidebar({
                     </button>
                 </div>
 
-                {/* ── Desktop Expand Toggle (visible only when collapsed on desktop) ── */}
+                {/* â”€â”€ Desktop Expand Toggle (visible only when collapsed on desktop) â”€â”€ */}
                 {collapsed && (
                     <div className="hidden lg:flex justify-center px-2 pt-1 pb-1">
                         <button
@@ -253,7 +261,7 @@ export default function Sidebar({
                     </div>
                 )}
 
-                {/* ── New Chat button ───────────────────────── */}
+                {/* â”€â”€ New Chat button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
                 <div className={`pt-2 pb-1 ${collapsed ? "px-3 lg:px-2" : "px-3"}`}>
                     <button
                         type="button"
@@ -281,7 +289,7 @@ export default function Sidebar({
                     </button>
                 </div>
 
-                {/* ── Main Navigation Links ─────────────────── */}
+                {/* â”€â”€ Main Navigation Links â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
                 <nav className={`pt-2 pb-1 ${collapsed ? "px-3 lg:px-2" : "px-3"}`} aria-label="Main navigation">
                     <div className="flex flex-col gap-0.5">
                         {MAIN_NAV_ITEMS.map((item) => {
@@ -339,10 +347,10 @@ export default function Sidebar({
                     </div>
                 </nav>
 
-                {/* ── Divider ──────────────────────────────── */}
+                {/* â”€â”€ Divider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
                 <div className={`my-1 border-t border-slate-100 dark:border-slate-800 ${collapsed ? "mx-3 lg:mx-2" : "mx-4"}`} />
 
-                {/* ── Conversations list (only on /chat, hidden when collapsed on desktop) ── */}
+                {/* â”€â”€ Conversations list (only on /chat, hidden when collapsed on desktop) â”€â”€ */}
                 {isOnChatPage && (
                     <nav
                         className={`min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-thin px-3 pt-2 pb-2 ${
@@ -414,52 +422,9 @@ export default function Sidebar({
                 {/* Spacer when not on /chat or collapsed */}
                 {(!isOnChatPage || collapsed) && <div className="flex-1" />}
 
-                {/* ── Bottom Section: Theme Toggle, Settings, Profile ── */}
+                {/* â”€â”€ Bottom Section: Settings and Profile â”€â”€ */}
                 <div className={`border-t border-slate-100 dark:border-slate-800 pt-2 pb-3 ${collapsed ? "px-3 lg:px-2" : "px-3"}`}>
                     <div className="flex flex-col gap-0.5">
-                        {/* Theme Toggle Button */}
-                        <button
-                            type="button"
-                            onClick={toggleTheme}
-                            title={collapsed ? `Theme (${resolvedTheme === "dark" ? "Dark" : "Light"})` : undefined}
-                            aria-label={`Switch theme (currently ${resolvedTheme})`}
-                            className={`group/theme relative flex items-center rounded-lg text-[13px] font-medium text-slate-600 transition-all duration-150 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${
-                                collapsed
-                                    ? "justify-center px-0 py-2.5"
-                                    : "gap-2.5 px-3 py-2"
-                            }`}
-                        >
-                            <span className="shrink-0 text-slate-400 group-hover/theme:text-slate-600 dark:text-slate-400 dark:group-hover/theme:text-slate-200">
-                                {resolvedTheme === "dark" ? (
-                                    /* Sun icon */
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                        <circle cx="12" cy="12" r="5" />
-                                        <line x1="12" y1="1" x2="12" y2="3" />
-                                        <line x1="12" y1="21" x2="12" y2="23" />
-                                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                                        <line x1="1" y1="12" x2="3" y2="12" />
-                                        <line x1="21" y1="12" x2="23" y2="12" />
-                                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-                                    </svg>
-                                ) : (
-                                    /* Moon icon */
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                                    </svg>
-                                )}
-                            </span>
-                            <span className={collapsed ? "lg:hidden" : ""}>
-                                {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
-                            </span>
-                            {collapsed && (
-                                <span className="pointer-events-none absolute left-full ml-2 z-50 hidden rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white shadow-md group-hover/theme:block dark:bg-slate-800 dark:border dark:border-slate-700 whitespace-nowrap" role="tooltip">
-                                    {resolvedTheme === "dark" ? "Switch to Light mode" : "Switch to Dark mode"}
-                                </span>
-                            )}
-                        </button>
-
                         {/* Settings & Profile */}
                         {BOTTOM_NAV_ITEMS.map((item) => {
                             const isActive = pathname === item.href;

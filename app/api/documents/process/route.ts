@@ -4,6 +4,12 @@ import { getPath } from "pdf-parse/worker";
 import { PDFParse } from "pdf-parse";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  createDocumentProcessingDiagnostics,
+  getSafeDocumentProcessingError,
+} from "@/lib/document-processing";
+import { getFaqProcessingResult } from "@/lib/testing-playground";
 
 export const runtime = "nodejs";
 
@@ -108,6 +114,10 @@ export async function POST(request: Request) {
       .from("documents")
       .update({
         status: "processing",
+        chunk_count: 0,
+        processed_at: null,
+        extraction_preview: null,
+        processing_error: null,
       })
       .eq("id", document.id)
       .eq("user_id", user.id);
@@ -122,6 +132,11 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
+    const admin = createAdminClient();
+    const { error: faqProcessingError } = await admin.from("assistant_faq_drafts")
+      .update({ status: "processing", processing_error: null, updated_at: new Date().toISOString() })
+      .eq("document_id", document.id).eq("owner_user_id", user.id);
+    if (faqProcessingError) logProcessingFailure("faq-draft-processing-status-update-failed");
 
     const { data: file, error: downloadError } = await supabase.storage
       .from("knowledge-base")
@@ -133,28 +148,25 @@ export async function POST(request: Request) {
       throw new Error("Unable to download document.");
     }
 
-    if (document.file_type !== "application/pdf") {
-      throw new Error("Only PDF processing is implemented right now.");
-    }
-
     if (file.size > MAX_FILE_SIZE) {
       throw new Error("File is too large. Maximum file size is 20 MB.");
     }
 
     const arrayBuffer = await file.arrayBuffer();
 
-    const parser = new PDFParse({
-      data: new Uint8Array(arrayBuffer),
-    });
-
     let text: string;
-
-    try {
-      const result = await parser.getText();
-
-      text = result.text.trim();
-    } finally {
-      await parser.destroy();
+    if (document.file_type === "application/pdf") {
+      const parser = new PDFParse({ data: new Uint8Array(arrayBuffer) });
+      try {
+        const result = await parser.getText();
+        text = result.text.trim();
+      } finally {
+        await parser.destroy();
+      }
+    } else if (document.file_type === "text/plain" || document.file_type === "text/markdown") {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(arrayBuffer).trim();
+    } else {
+      throw new Error("This document type is not supported for processing.");
     }
 
     if (!text) {
@@ -248,10 +260,21 @@ export async function POST(request: Request) {
       throw new Error("Unable to save document chunks.");
     }
 
+    const { count: storedChunkCount, error: chunkCountError } = await supabase
+      .from("document_chunks")
+      .select("id", { count: "exact", head: true })
+      .eq("document_id", document.id)
+      .eq("user_id", user.id);
+    if (chunkCountError || storedChunkCount !== chunks.length) {
+      logProcessingFailure("stored-chunk-count-verification-failed");
+      throw new Error("Unable to verify stored document chunks.");
+    }
+
     const { error: updateDocumentError } = await supabase
       .from("documents")
       .update({
         status: "processed",
+        ...createDocumentProcessingDiagnostics(text, storedChunkCount),
       })
       .eq("id", document.id)
       .eq("user_id", user.id);
@@ -263,6 +286,10 @@ export async function POST(request: Request) {
         "Chunks were created, but document status could not be updated.",
       );
     }
+    const { error: faqProcessedError } = await createAdminClient().from("assistant_faq_drafts")
+      .update({ ...getFaqProcessingResult(true, ""), updated_at: new Date().toISOString() })
+      .eq("document_id", document.id).eq("owner_user_id", user.id);
+    if (faqProcessedError) logProcessingFailure("faq-draft-processed-status-update-failed");
 
     return NextResponse.json({
       success: true,
@@ -276,7 +303,7 @@ export async function POST(request: Request) {
       chunkCount: chunks.length,
       embeddingDimensions: EMBEDDING_DIMENSIONS,
     });
-  } catch {
+  } catch (error) {
     logProcessingFailure("processing-failed");
 
     /*
@@ -284,10 +311,20 @@ export async function POST(request: Request) {
      * document as processing, mark it as failed.
      */
     if (supabase && documentId && userId) {
+      const { count: storedChunkCount, error: chunkCountError } = await supabase
+        .from("document_chunks")
+        .select("id", { count: "exact", head: true })
+        .eq("document_id", documentId)
+        .eq("user_id", userId);
+      if (chunkCountError) {
+        logProcessingFailure("failed-chunk-count-verification-failed");
+      }
       const { error: failedStatusError } = await supabase
         .from("documents")
         .update({
           status: "failed",
+          ...(storedChunkCount === null ? {} : { chunk_count: storedChunkCount ?? 0 }),
+          processing_error: getSafeDocumentProcessingError(error),
         })
         .eq("id", documentId)
         .eq("user_id", userId);
@@ -295,6 +332,10 @@ export async function POST(request: Request) {
       if (failedStatusError) {
         logProcessingFailure("failed-status-update-failed");
       }
+      const { error: faqFailedError } = await createAdminClient().from("assistant_faq_drafts")
+        .update({ ...getFaqProcessingResult(false, "Knowledge processing failed. Retry from the assistant testing page."), updated_at: new Date().toISOString() })
+        .eq("document_id", documentId).eq("owner_user_id", userId);
+      if (faqFailedError) logProcessingFailure("faq-draft-failed-status-update-failed");
     }
 
     return NextResponse.json(

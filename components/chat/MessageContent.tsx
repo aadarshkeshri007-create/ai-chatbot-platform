@@ -5,6 +5,10 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import {
+  normalizeAssistantMarkdown,
+  sanitizeMarkdownUrl,
+} from "@/lib/markdown-content";
 
 type MessageContentProps = {
   content: string;
@@ -150,16 +154,32 @@ export default function MessageContent({
           </td>
         ),
 
-        a: ({ href, children }) => (
-          <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${linkClass} break-words [overflow-wrap:anywhere]`}
-          >
+        strong: ({ children }) => (
+          <strong className="font-semibold text-inherit">
             {children}
-          </a>
+          </strong>
         ),
+
+        a: ({ href, children }) => {
+          const safeHref = sanitizeMarkdownUrl(href);
+          if (!safeHref) {
+            return (
+              <span className="underline decoration-slate-400/50 break-words [overflow-wrap:anywhere]">
+                {children}
+              </span>
+            );
+          }
+          return (
+            <a
+              href={safeHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${linkClass} break-words [overflow-wrap:anywhere]`}
+            >
+              {children}
+            </a>
+          );
+        },
 
         code({ className, children }) {
           const match = /language-(\w+)/.exec(className || "");
@@ -204,7 +224,7 @@ export default function MessageContent({
         },
       }}
     >
-      {content}
+      {isUser ? content : normalizeAssistantMarkdown(content)}
     </ReactMarkdown>
   );
 }

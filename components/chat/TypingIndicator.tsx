@@ -24,7 +24,8 @@ export default function TypingIndicator() {
         <div
           className="flex items-center gap-1 rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900"
           role="status"
-          aria-label="AI is thinking"
+          aria-label="Assistant is thinking"
+          aria-live="polite"
         >
           <span
             className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400 dark:bg-slate-500"

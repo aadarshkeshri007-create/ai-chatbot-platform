@@ -1,4 +1,7 @@
+import { INSTALLATION_VERIFY_PATH, isVerificationConfigReady } from "@/lib/widget-installation";
+
 const widgetScript = `(() => {
+  const isVerificationConfigReady = (${isVerificationConfigReady.toString()});
   const script = document.currentScript;
   if (!(script instanceof HTMLScriptElement)) return;
 
@@ -11,6 +14,23 @@ const widgetScript = `(() => {
   }
 
   const appOrigin = new URL(script.src, window.location.href).origin;
+  const verificationToken = script.dataset.verificationToken;
+  const sessionStorageKey = "supportai:visitor-session:" + assistantId;
+  function createVisitorSessionToken() {
+    const bytes = new Uint8Array(32);
+    window.crypto.getRandomValues(bytes);
+    return btoa(String.fromCharCode(...bytes)).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+  }
+  let visitorSessionToken = "";
+  try {
+    visitorSessionToken = window.sessionStorage.getItem(sessionStorageKey) || "";
+    if (!/^[A-Za-z0-9_-]{40,100}$/.test(visitorSessionToken)) {
+      visitorSessionToken = createVisitorSessionToken();
+      window.sessionStorage.setItem(sessionStorageKey, visitorSessionToken);
+    }
+  } catch { /* Privacy-restricted storage falls back to an in-memory visitor session. */
+    visitorSessionToken = createVisitorSessionToken();
+  }
   const maxMessageLength = 8000;
   const requestTimeoutMs = 30000;
   const maxRetryAfterSeconds = 300;
@@ -27,6 +47,12 @@ const widgetScript = `(() => {
     if (status === 429) return "Too many requests. Please wait before trying again.";
     return "SupportAI is temporarily unavailable. Please try again later.";
   }
+  function publicLeadErrorForStatus(status) {
+    if (status === 400 || status === 413) return "Please check your details and try again.";
+    if (status === 403) return "Lead submission is unavailable from this website.";
+    if (status === 429) return "Please wait a moment before trying again.";
+    return "Lead submission is temporarily unavailable. Please try again.";
+  }
   const mount = document.createElement("div");
   mount.setAttribute("data-supportai-widget", "");
   document.body.appendChild(mount);
@@ -38,7 +64,7 @@ const widgetScript = `(() => {
       .launcher {
         position: fixed; right: 22px; bottom: 22px; z-index: 2147483647;
         width: 58px; height: 58px; border: 0; border-radius: 50%;
-        background: #2563eb; color: white; cursor: pointer;
+        background: var(--brand-color, #236b5b); color: var(--brand-text-color, #fff); cursor: pointer;
         box-shadow: 0 10px 28px rgba(15, 23, 42, .22);
         font: 25px/58px system-ui, sans-serif;
         text-align: center;
@@ -72,6 +98,53 @@ const widgetScript = `(() => {
   const frame = root.querySelector(".frame");
   if (!(launcher instanceof HTMLButtonElement) || !(frame instanceof HTMLIFrameElement)) return;
 
+  let brand = {
+    color: "#236b5b",
+    textColor: "#ffffff",
+    linkColor: "#236b5b",
+  };
+  let frameReady = false;
+  const sendBrandToFrame = () => {
+    frame.contentWindow?.postMessage({
+      type: "supportai:brand-config",
+      brand_color: brand.color,
+      brand_text_color: brand.textColor,
+      brand_link_color: brand.linkColor,
+    }, appOrigin);
+  };
+
+  fetch(appOrigin + "/api/public/assistant-config?assistant_id=" + encodeURIComponent(assistantId), {
+    mode: "cors",
+    credentials: "omit",
+    cache: "no-store",
+  }).then((response) => response.ok ? response.json() : null).then((config) => {
+    if (!isVerificationConfigReady(config)) {
+      debugWidget("configuration-not-ready", {});
+      return;
+    }
+    brand = {
+      color: config.brand_color.toLowerCase(),
+      textColor: config.brand_text_color.toLowerCase(),
+      linkColor: config.brand_link_color.toLowerCase(),
+    };
+    mount.style.setProperty("--brand-color", brand.color);
+    mount.style.setProperty("--brand-text-color", brand.textColor);
+    if (frameReady) sendBrandToFrame();
+    if (typeof verificationToken === "string" && /^[A-Za-z0-9_-]{40,100}$/.test(verificationToken)) {
+      void fetch(appOrigin + "${INSTALLATION_VERIFY_PATH}", {
+        method: "POST",
+        mode: "cors",
+        credentials: "omit",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assistant_id: assistantId, token: verificationToken }),
+      }).then((response) => {
+        debugWidget("installation-verification-response", { status: response.status });
+      }).catch(() => {
+        debugWidget("installation-verification-unreachable", {});
+      });
+    }
+  }).catch(() => {});
+
   frame.src = appOrigin + "/widget-frame?assistant_id=" + encodeURIComponent(assistantId) +
     "&parent_origin=" + encodeURIComponent(window.location.origin);
 
@@ -104,7 +177,9 @@ const widgetScript = `(() => {
       data === null ||
       Array.isArray(data) ||
       (data.type !== "supportai:chat-request" &&
+        data.type !== "supportai:restore-request" &&
         data.type !== "supportai:handoff-request" &&
+        data.type !== "supportai:lead-request" &&
         data.type !== "supportai:handoff-poll")
     ) return;
     if (
@@ -118,13 +193,19 @@ const widgetScript = `(() => {
     if (data.type === "supportai:handoff-request" &&
       (typeof data.reason !== "string" || !data.reason.trim() || data.reason.length > 2000 ||
         !Array.isArray(data.transcript) || data.transcript.length > 50)) return;
+    if (data.type === "supportai:lead-request" &&
+      (typeof data.name !== "string" || typeof data.email !== "string" || typeof data.question !== "string" ||
+        !data.name.trim() || !data.email.trim() || !data.question.trim() ||
+        data.name.length > 120 || data.email.length > 254 || data.question.length > 5000)) return;
     if (data.type === "supportai:handoff-poll" &&
       (typeof data.handoffId !== "string" || typeof data.accessToken !== "string" ||
         data.handoffId.length > 100 || data.accessToken.length > 200)) return;
 
     const requestId = data.requestId;
     const isChat = data.type === "supportai:chat-request";
+    const isRestore = data.type === "supportai:restore-request";
     const isHandoff = data.type === "supportai:handoff-request";
+    const isLead = data.type === "supportai:lead-request";
     pendingRequests.add(requestId);
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), requestTimeoutMs);
@@ -132,18 +213,24 @@ const widgetScript = `(() => {
     try {
       debugWidget("fetch-dispatch", { type: data.type, requestId });
       const response = await fetch(
-        isChat
+        isChat || isRestore
           ? appOrigin + "/api/public/chat"
           : isHandoff
             ? appOrigin + "/api/public/handoff"
+            : isLead
+              ? appOrigin + "/api/leads"
             : appOrigin + "/api/public/handoff?handoff_id=" +
               encodeURIComponent(data.handoffId) + "&access_token=" +
               encodeURIComponent(data.accessToken),
         {
-          method: isChat ? "POST" : isHandoff ? "POST" : "GET",
-          headers: isChat || isHandoff ? { "Content-Type": "application/json" } : undefined,
-          body: isChat
-            ? JSON.stringify({ assistant_id: assistantId, message: data.message.trim() })
+          method: isChat || isRestore || isHandoff || isLead ? "POST" : "GET",
+          headers: isChat || isRestore || isHandoff || isLead ? { "Content-Type": "application/json" } : undefined,
+          body: isChat || isRestore
+            ? JSON.stringify({
+                assistant_id: assistantId,
+                session_token: visitorSessionToken,
+                ...(isRestore ? { action: "restore" } : { message: data.message.trim(), request_id: data.requestId }),
+              })
             : isHandoff
               ? JSON.stringify({
                   assistant_id: assistantId,
@@ -151,11 +238,62 @@ const widgetScript = `(() => {
                   customer_email: data.customerEmail,
                   reason: data.reason,
                   transcript: data.transcript,
+                  session_token: visitorSessionToken,
+                  conversation_id: data.conversationId,
                 })
+              : isLead
+                ? JSON.stringify({
+                    assistant_id: assistantId,
+                    name: data.name.trim(),
+                    email: data.email.trim(),
+                    question: data.question.trim(),
+                  })
               : undefined,
           signal: controller.signal,
         },
       );
+      if (isChat && response.ok && response.headers.get("content-type")?.includes("text/event-stream")) {
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error("The SupportAI response stream is unavailable.");
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let sawComplete = false;
+        const forwardEvent = (block) => {
+          if (!block.trim()) return;
+          let eventName = "message";
+          const dataLines = [];
+          for (const line of block.split("\\n")) {
+            if (line.startsWith("event:")) eventName = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+          }
+          if (!dataLines.length) return;
+          let payload;
+          try { payload = JSON.parse(dataLines.join("\\n")); }
+          catch { throw new Error("SupportAI returned a malformed stream event."); }
+          if (eventName === "delta" && typeof payload?.text === "string") {
+            frame.contentWindow?.postMessage({ type: "supportai:chat-stream", requestId, event: "delta", payload }, appOrigin);
+          } else if (eventName === "complete" && payload && typeof payload === "object") {
+            sawComplete = true;
+            frame.contentWindow?.postMessage({ type: "supportai:chat-stream", requestId, event: "complete", payload }, appOrigin);
+          } else if (eventName === "error") {
+            frame.contentWindow?.postMessage({ type: "supportai:chat-stream", requestId, event: "error", payload: { message: typeof payload?.message === "string" ? payload.message : "The assistant response could not be completed." } }, appOrigin);
+          } else {
+            throw new Error("SupportAI returned an unsupported stream event.");
+          }
+        };
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const blocks = buffer.split("\\n\\n");
+          buffer = blocks.pop() || "";
+          for (const block of blocks) forwardEvent(block);
+        }
+        buffer += decoder.decode();
+        if (buffer.trim()) forwardEvent(buffer);
+        if (!sawComplete) throw new Error("The SupportAI response ended before it was saved.");
+        return;
+      }
       let payload;
       let validJson = true;
       try {
@@ -172,9 +310,18 @@ const widgetScript = `(() => {
         payload === null ||
         Array.isArray(payload)
       ) {
-        payload = {
-          error: publicErrorForStatus(response.status),
-        };
+        payload = isLead
+          ? response.ok
+            ? { code: "LEAD_RESPONSE_INVALID", message: publicLeadErrorForStatus(response.status) }
+            : {
+                code: typeof payload?.code === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(payload.code)
+                  ? payload.code
+                  : response.status === 502 ? "LEAD_DELIVERY_FAILED" : response.status === 503 ? "LEAD_SERVICE_UNAVAILABLE" : response.status === 504 ? "LEAD_DELIVERY_TIMEOUT" : "LEAD_SUBMISSION_FAILED",
+                message: typeof payload?.message === "string" && payload.message.length <= 240
+                  ? payload.message
+                  : publicLeadErrorForStatus(response.status),
+              }
+          : { error: publicErrorForStatus(response.status) };
       }
 
       const retryAfterHeader = response.headers.get("Retry-After");
@@ -188,13 +335,14 @@ const widgetScript = `(() => {
       if (frame.contentWindow) {
         frame.contentWindow.postMessage(
           {
-            type: isChat ? "supportai:chat-response" : "supportai:handoff-response",
+            type: isChat ? "supportai:chat-response" : isRestore ? "supportai:restore-response" : isLead ? "supportai:lead-response" : "supportai:handoff-response",
             requestId,
             ok: response.ok && validJson,
             ...(response.ok && validJson
               ? { payload }
               : {
-                  error: payload.error,
+                  error: isLead ? payload.message : payload.error,
+                  ...(isLead && typeof payload.code === "string" ? { code: payload.code } : {}),
                   status: response.status,
                   ...(response.status === 429 ? { retryAfterSeconds } : {}),
                 }),
@@ -206,12 +354,13 @@ const widgetScript = `(() => {
       if (frame.contentWindow) {
         frame.contentWindow.postMessage(
           {
-          type: isChat ? "supportai:chat-response" : "supportai:handoff-response",
+            type: isChat ? "supportai:chat-response" : isRestore ? "supportai:restore-response" : isLead ? "supportai:lead-response" : "supportai:handoff-response",
             requestId,
             ok: false,
+            ...(isLead ? { code: error?.name === "AbortError" ? "LEAD_API_TIMEOUT" : "LEAD_API_UNREACHABLE" } : {}),
             error: error?.name === "AbortError"
               ? "The SupportAI request timed out."
-              : "Unable to reach SupportAI right now.",
+              : isLead ? "Lead submission could not reach SupportAI. Please try again later." : "Unable to reach SupportAI right now.",
           },
           appOrigin,
         );
@@ -222,9 +371,20 @@ const widgetScript = `(() => {
     }
   }
 
-  // Handle close message from the iframe's × button
+  // Handle messages from iframe or host page
   window.addEventListener("message", (event) => {
     if (event.source !== frame.contentWindow || event.origin !== appOrigin) return;
+    if (event.data && event.data.type === "supportai:rotate-visitor-session") {
+      visitorSessionToken = createVisitorSessionToken();
+      try { window.sessionStorage.setItem(sessionStorageKey, visitorSessionToken); } catch { /* Keep reset session in memory. */ }
+      frame.contentWindow?.postMessage({ type: "supportai:reset-session" }, appOrigin);
+      return;
+    }
+    if (event.data && event.data.type === "supportai:ready") {
+      frameReady = true;
+      sendBrandToFrame();
+      return;
+    }
     if (event.data && event.data.type === "supportai:close") {
       closeWidget();
       return;

@@ -1,14 +1,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import ThemeToggle from "@/components/ThemeToggle";
 
 type ChatHeaderProps = {
   onToggleSidebar: () => void;
 };
 
 const PAGE_TITLES: Record<string, string> = {
-  "/chat": "AI Assistant",
+  "/chat": "Test your assistant",
   "/history": "Chat History",
   "/upload": "Knowledge Base",
   "/handoffs": "Support Inbox",
@@ -56,10 +55,6 @@ export default function ChatHeader({ onToggleSidebar }: ChatHeaderProps) {
         </div>
       </div>
 
-      {/* Header controls: Theme toggle */}
-      <div className="flex items-center gap-2">
-        <ThemeToggle />
-      </div>
     </header>
   );
 }

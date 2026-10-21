@@ -66,10 +66,11 @@ test("empty or null assistant domains preserve global-origin behavior", () => {
   assert.equal(isAllowedAssistantOrigin("https://other.example", null), true);
 });
 
-test("normalizes valid hostnames and rejects URL-like or duplicate-prone inputs", () => {
+test("normalizes pasted website URLs to exact hostnames and rejects unsafe inputs", () => {
   assert.equal(normalizeAllowedDomainInput(" Support.Example.com. "), "support.example.com");
-  assert.equal(normalizeAllowedDomainInput("https://support.example.com"), null);
-  assert.equal(normalizeAllowedDomainInput("support.example.com/path"), null);
+  assert.equal(normalizeAllowedDomainInput("https://support.example.com/path?ref=docs#faq"), "support.example.com");
+  assert.equal(normalizeAllowedDomainInput("http://support.example.com:8080/"), "support.example.com");
+  assert.equal(normalizeAllowedDomainInput("javascript:alert(1)"), null);
   assert.equal(normalizeAllowedDomainInput("user@support.example.com"), null);
   assert.equal(normalizeAllowedDomainInput("*.example.com"), null);
   assert.equal(normalizeAllowedDomainInput("evil-example.com"), "evil-example.com");

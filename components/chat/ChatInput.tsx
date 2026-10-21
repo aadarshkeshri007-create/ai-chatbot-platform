@@ -38,8 +38,8 @@ export default function ChatInput({
   const canSend = message.trim().length > 0 && !loading;
 
   return (
-    <footer className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:px-5 sm:py-4 transition-colors duration-150">
-      <div className="mx-auto flex max-w-3xl items-end gap-3">
+    <footer className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] sm:px-5 sm:py-2.5 transition-colors duration-150">
+      <div className="mx-auto flex max-w-3xl items-end gap-2">
         <div className="relative flex-1">
           <textarea
             ref={textareaRef}
@@ -50,7 +50,7 @@ export default function ChatInput({
             onKeyDown={handleKeyDown}
             disabled={loading}
             rows={1}
-            className="max-h-40 w-full resize-none overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2.5 sm:px-4 text-base sm:text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] shadow-sm transition-colors duration-150 focus:border-[var(--focus)] focus:bg-[var(--surface)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]/15 disabled:bg-[var(--surface-muted)] disabled:text-[var(--text-secondary)] disabled:cursor-not-allowed"
+            className="max-h-36 w-full resize-none overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 sm:px-4 text-base sm:text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] shadow-sm transition-colors duration-150 focus:border-[var(--focus)] focus:bg-[var(--surface)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]/15 disabled:bg-[var(--surface-muted)] disabled:text-[var(--text-secondary)] disabled:cursor-not-allowed"
             aria-label="Chat message"
           />
         </div>

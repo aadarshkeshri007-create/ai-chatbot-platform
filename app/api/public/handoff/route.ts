@@ -16,6 +16,7 @@ import {
 } from "@/lib/public-chat-cors";
 import { checkPublicChatRateLimit } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { hashWidgetSessionToken, WIDGET_SESSION_TOKEN_PATTERN } from "@/lib/widget-conversation";
 
 const assistantIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -75,6 +76,23 @@ export async function POST(request: Request) {
       return genericError(request);
     }
 
+    let conversationId: string | null = null;
+    if (body.conversation_id !== undefined && body.conversation_id !== null) {
+      if (typeof body.conversation_id !== "string" || !assistantIdPattern.test(body.conversation_id) ||
+          typeof body.session_token !== "string" || !WIDGET_SESSION_TOKEN_PATTERN.test(body.session_token)) {
+        return genericError(request);
+      }
+      const { data: linkedConversation, error: linkedConversationError } = await supabase.from("conversations")
+        .select("id")
+        .eq("id", body.conversation_id)
+        .eq("assistant_id", assistantId)
+        .eq("visitor_session_hash", hashWidgetSessionToken(body.session_token))
+        .maybeSingle();
+      if (linkedConversationError) return genericError(request, 503);
+      if (!linkedConversation) return genericError(request, 403);
+      conversationId = linkedConversation.id;
+    }
+
     const transcript = parseTranscript(body.transcript);
     const access = createHandoffAccessToken();
     const { data: handoff, error: insertError } = await supabase
@@ -82,6 +100,7 @@ export async function POST(request: Request) {
       .insert({
         assistant_id: assistantId,
         owner_user_id: profile.id,
+        conversation_id: conversationId,
         customer_name: customerName,
         customer_email: customerEmail,
         reason,
