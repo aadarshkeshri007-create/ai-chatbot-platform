@@ -29,6 +29,11 @@ import { getConversationLoadErrorMessage, normalizeOwnedTestConversations, UNAUT
 import { getSafeChatFailureCode, getSafeChatFailureMessage } from "@/lib/chat-errors";
 import { finishChatRequest, tryStartChatRequest } from "@/lib/chat-request-guard";
 import { shouldAutoScrollToBottom } from "@/lib/chat-scroll";
+import {
+    getChatConversationUrl,
+    readChatConversationId,
+    resolveInitialChatSelection,
+} from "@/lib/chat-selection";
 
 const BOTTOM_THRESHOLD_PX = 24;
 
@@ -46,6 +51,12 @@ export default function ChatPage() {
 
     const [conversationId, setConversationId] =
         useState<string | null>(null);
+    const [requestedConversationId, setRequestedConversationId] =
+        useState<string | null | undefined>(() =>
+            typeof window === "undefined"
+                ? undefined
+                : readChatConversationId(window.location.search),
+        );
 
     const [assistantName, setAssistantName] = useState(DEFAULT_ASSISTANT_NAME);
     const [welcomeMessage, setWelcomeMessage] = useState(DEFAULT_WELCOME_MESSAGE);
@@ -62,6 +73,10 @@ export default function ChatPage() {
     const shouldAutoScrollRef =
         useRef(true);
     const chatRequestLockRef = useRef({ current: false });
+    const conversationSelectionVersionRef = useRef(0);
+    const conversationSelectionLoadingRef = useRef(false);
+    const pendingInitialSelectionRef = useRef<string | null>(null);
+    const unavailableConversationHandledRef = useRef<string | null>(null);
 
     const [messages, setMessages] =
         useState<Message[]>([
@@ -79,12 +94,29 @@ export default function ChatPage() {
      * to the Sidebar via context.
      */
     const {
+        conversations,
         setConversations,
         setActiveConversationId,
         setOnSelectConversation,
         setOnNewChat,
         setOnDeleteConversation,
     } = useSidebarContext();
+
+    const syncConversationUrl = useCallback((selectedId: string | null) => {
+        const nextUrl = getChatConversationUrl(window.location.href, selectedId);
+        window.history.replaceState(window.history.state, "", nextUrl);
+    }, []);
+
+    const initialSelection = resolveInitialChatSelection(
+        requestedConversationId,
+        conversations.map((conversation) => conversation.id),
+        conversationListLoading,
+        Boolean(conversationLoadError),
+    );
+    const initialSelectionType = initialSelection.type;
+    const initialRestoreId = initialSelection.type === "restore"
+        ? initialSelection.conversationId
+        : null;
 
     const scrollToBottom = useCallback(() => {
         const container =
@@ -246,7 +278,19 @@ export default function ChatPage() {
 
     // Start a new chat
     const handleNewChat = useCallback(() => {
+        pendingInitialSelectionRef.current = null;
+        unavailableConversationHandledRef.current = null;
+
+        if (conversationSelectionLoadingRef.current) {
+            conversationSelectionVersionRef.current += 1;
+            conversationSelectionLoadingRef.current = false;
+            setLoading(false);
+        }
+
+        setRequestedConversationId(null);
+        syncConversationUrl(null);
         setConversationId(null);
+        setChatError(null);
 
         setMessages([
             {
@@ -259,7 +303,7 @@ export default function ChatPage() {
 
         setMessage("");
         shouldAutoScrollRef.current = true;
-    }, [welcomeMessage]);
+    }, [syncConversationUrl, welcomeMessage]);
 
     const handleDeleteConversation =
         useCallback(async (
@@ -302,6 +346,10 @@ export default function ChatPage() {
                 conversationId ===
                 conversationIdToDelete
             ) {
+                pendingInitialSelectionRef.current = null;
+                unavailableConversationHandledRef.current = null;
+                setRequestedConversationId(null);
+                syncConversationUrl(null);
                 setConversationId(null);
 
                 setMessages([
@@ -317,7 +365,7 @@ export default function ChatPage() {
                 shouldAutoScrollRef.current =
                     true;
             }
-        }, [conversationId, setConversations, welcomeMessage]);
+        }, [conversationId, setConversations, syncConversationUrl, welcomeMessage]);
 
     // Load a conversation
     const handleSelectConversation =
@@ -328,10 +376,16 @@ export default function ChatPage() {
                 return;
             }
 
+            pendingInitialSelectionRef.current = null;
+            const requestVersion = ++conversationSelectionVersionRef.current;
+            conversationSelectionLoadingRef.current = true;
+            setRequestedConversationId(selectedConversationId);
+            syncConversationUrl(selectedConversationId);
             setConversationId(
                 selectedConversationId,
             );
 
+            setChatError(null);
             setLoading(true);
 
             try {
@@ -359,6 +413,8 @@ export default function ChatPage() {
                     throw error;
                 }
 
+                if (requestVersion !== conversationSelectionVersionRef.current) return;
+
                 setMessages(
                     (data ?? []).map(
                         (msg) => ({
@@ -375,6 +431,8 @@ export default function ChatPage() {
                 shouldAutoScrollRef.current =
                     true;
             } catch (error) {
+                if (requestVersion !== conversationSelectionVersionRef.current) return;
+
                 console.error(
                     "Error loading conversation:",
                     error,
@@ -389,9 +447,39 @@ export default function ChatPage() {
                     },
                 ]);
             } finally {
-                setLoading(false);
+                if (requestVersion === conversationSelectionVersionRef.current) {
+                    conversationSelectionLoadingRef.current = false;
+                    setLoading(false);
+                }
             }
-        }, [loading]);
+        }, [loading, syncConversationUrl]);
+
+    useEffect(() => {
+        if (initialRestoreId) {
+            const selectedId = initialRestoreId;
+            if (conversationId === selectedId || pendingInitialSelectionRef.current === selectedId) return;
+
+            pendingInitialSelectionRef.current = selectedId;
+            queueMicrotask(() => {
+                if (pendingInitialSelectionRef.current !== selectedId) return;
+                pendingInitialSelectionRef.current = null;
+                void handleSelectConversation(selectedId);
+            });
+            return;
+        }
+
+        if (initialSelectionType === "unavailable" && unavailableConversationHandledRef.current !== requestedConversationId) {
+            unavailableConversationHandledRef.current = requestedConversationId ?? null;
+            syncConversationUrl(null);
+        }
+    }, [
+        conversationId,
+        handleSelectConversation,
+        initialRestoreId,
+        initialSelectionType,
+        requestedConversationId,
+        syncConversationUrl,
+    ]);
 
     /*
      * ── Register callbacks with context ──────
@@ -561,6 +649,8 @@ export default function ChatPage() {
                 );
 
             if (returnedConversationId) {
+                pendingInitialSelectionRef.current = null;
+                syncConversationUrl(returnedConversationId);
                 setConversationId(
                     returnedConversationId,
                 );
@@ -748,16 +838,17 @@ export default function ChatPage() {
 
     return (
         <>
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-1.5 sm:px-6">
-                <div className="flex min-w-0 items-center gap-2">
-                    <p className="truncate text-sm font-semibold text-[var(--text-primary)]">Test your assistant</p>
-                    <span title="Test sessions are kept separate from visitor conversations." className="shrink-0 rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)]"><span className="hidden sm:inline">Private test session</span><span className="sm:hidden">Private</span></span>
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2 sm:px-6">
+                <div className="flex min-w-0 items-baseline gap-2">
+                    <h1 className="truncate text-sm font-semibold tracking-tight text-[var(--text-primary)]">Test your assistant</h1>
+                    <p className="hidden truncate text-xs text-[var(--text-secondary)] sm:block">Private workspace for testing grounded answers.</p>
+                    <span title="Test sessions are kept separate from visitor conversations." className="shrink-0 rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--text-secondary)]"><span className="hidden sm:inline">Private test</span><span className="sm:hidden">Private</span></span>
                 </div>
                 <FeedbackReviewPanel />
             </div>
             <OnboardingChecklist />
             {conversationLoadError && (
-                <div role="alert" className="shrink-0 border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 sm:px-6">
+                <div role="alert" className="shrink-0 border-b border-[color-mix(in_srgb,var(--warning)_35%,var(--border))] bg-[var(--warning-soft)] px-4 py-3 text-sm text-[var(--warning)] sm:px-6">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <p>{conversationLoadError}</p>
                         <button type="button" onClick={() => void loadConversations()} disabled={conversationListLoading} className="rounded-md border border-current px-3 py-1.5 font-medium disabled:cursor-not-allowed disabled:opacity-60">
@@ -785,12 +876,12 @@ export default function ChatPage() {
                 onFeedback={submitAnswerFeedback}
             />
 
-            {chatError && (
+            {(chatError || initialSelection.type === "unavailable") && (
                 <p
                     role="alert"
-                    className="shrink-0 border-t border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+                    className="shrink-0 border-t border-[color-mix(in_srgb,var(--error)_30%,var(--border))] bg-[var(--error-soft)] px-3 py-2 text-sm text-[var(--error)]"
                 >
-                    {chatError}
+                    {chatError || "This conversation is unavailable. Choose one from your saved conversations."}
                 </p>
             )}
 

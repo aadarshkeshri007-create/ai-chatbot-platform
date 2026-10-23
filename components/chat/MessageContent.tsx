@@ -32,7 +32,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={handleCopy}
-      className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
+      className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)]/10 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
       aria-label={copied ? "Copied" : "Copy code"}
     >
       {copied ? (
@@ -60,17 +60,17 @@ export default function MessageContent({
   isUser = false,
 }: MessageContentProps) {
   // Text color classes conditional on user vs assistant context and dark mode
-  const textClass = isUser ? "text-white/90" : "text-slate-800 dark:text-slate-200";
-  const headingClass = isUser ? "text-white" : "text-slate-900 dark:text-slate-100";
+  const textClass = isUser ? "text-white/90" : "text-[var(--text-primary)] dark:text-[var(--text-primary)]";
+  const headingClass = isUser ? "text-white" : "text-[var(--text-primary)] dark:text-[var(--text-primary)]";
   const linkClass = isUser
     ? "text-white underline decoration-white/40"
-    : "text-teal-600 underline decoration-teal-300/50 hover:text-teal-700 dark:text-teal-400 dark:decoration-teal-500/30 dark:hover:text-teal-300";
+    : "text-[var(--accent-link)] underline decoration-teal-300/50 hover:text-[var(--accent-link)] dark:text-[var(--accent-link)] dark:decoration-teal-500/30 dark:hover:text-teal-300";
   const inlineCodeClass = isUser
-    ? "rounded bg-white/15 px-1.5 py-0.5 font-mono text-[13px] text-white"
-    : "rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[13px] text-slate-800 dark:bg-slate-800 dark:text-slate-200";
+    ? "rounded bg-[var(--surface)]/15 px-1.5 py-0.5 font-mono text-[13px] text-white"
+    : "rounded bg-[var(--surface-muted)] px-1.5 py-0.5 font-mono text-[13px] text-[var(--text-primary)] dark:bg-[var(--surface-muted)] dark:text-[var(--text-primary)]";
   const blockquoteClass = isUser
     ? "my-3 border-l-[3px] border-white/30 pl-3 italic text-white/80"
-    : "my-3 border-l-[3px] border-slate-300 pl-3 italic text-slate-500 dark:border-slate-700 dark:text-slate-400";
+    : "my-3 border-l-[3px] border-[var(--border)] pl-3 italic text-[var(--text-secondary)] dark:border-[var(--border)] dark:text-[var(--text-secondary)]";
 
   return (
     <ReactMarkdown
@@ -125,11 +125,11 @@ export default function MessageContent({
         ),
 
         hr: () => (
-          <hr className={`my-4 ${isUser ? "border-white/20" : "border-slate-200 dark:border-slate-800"}`} />
+          <hr className={`my-4 ${isUser ? "border-white/20" : "border-[var(--border)] dark:border-[var(--border)]"}`} />
         ),
 
         table: ({ children }) => (
-          <div className="my-3 max-w-full overflow-x-auto scrollbar-thin rounded-lg border border-slate-200 dark:border-slate-800">
+          <div className="my-3 max-w-full overflow-x-auto scrollbar-thin rounded-lg border border-[var(--border)] dark:border-[var(--border)]">
             <table className="w-full min-w-full border-collapse text-sm">
               {children}
             </table>
@@ -137,19 +137,19 @@ export default function MessageContent({
         ),
 
         thead: ({ children }) => (
-          <thead className="bg-slate-50 dark:bg-slate-800/60">
+          <thead className="bg-[var(--background)] dark:bg-[var(--surface-muted)]/60">
             {children}
           </thead>
         ),
 
         th: ({ children }) => (
-          <th className="border-b border-slate-200 px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">
+          <th className="border-b border-[var(--border)] px-3 py-2 text-left text-xs font-semibold text-[var(--text-secondary)] dark:border-[var(--border)] dark:text-[var(--text-secondary)]">
             {children}
           </th>
         ),
 
         td: ({ children }) => (
-          <td className="border-b border-slate-100 px-3 py-2 text-sm dark:border-slate-800 dark:text-slate-300">
+          <td className="border-b border-[var(--border)] px-3 py-2 text-sm dark:border-[var(--border)] dark:text-[var(--text-secondary)]">
             {children}
           </td>
         ),
@@ -187,10 +187,10 @@ export default function MessageContent({
           if (match) {
             const codeString = String(children).replace(/\n$/, "");
             return (
-              <div className="my-3 max-w-full overflow-hidden rounded-lg border border-slate-700/50 first:mt-0">
+              <div className="my-3 max-w-full overflow-hidden rounded-lg border border-[var(--border)]/50 first:mt-0">
                 {/* Code header */}
                 <div className="flex items-center justify-between bg-[#1e1e2e] px-3 py-1.5">
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-secondary)]">
                     {match[1]}
                   </span>
                   <CopyButton text={codeString} />

@@ -35,6 +35,14 @@ export default function ChatInput({
     }
   };
 
+  const prevLoadingRef = useRef(loading);
+  useEffect(() => {
+    if (prevLoadingRef.current && !loading) {
+      textareaRef.current?.focus();
+    }
+    prevLoadingRef.current = loading;
+  }, [loading]);
+
   const canSend = message.trim().length > 0 && !loading;
 
   return (
@@ -50,7 +58,7 @@ export default function ChatInput({
             onKeyDown={handleKeyDown}
             disabled={loading}
             rows={1}
-            className="max-h-36 w-full resize-none overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 sm:px-4 text-base sm:text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] shadow-sm transition-colors duration-150 focus:border-[var(--focus)] focus:bg-[var(--surface)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]/15 disabled:bg-[var(--surface-muted)] disabled:text-[var(--text-secondary)] disabled:cursor-not-allowed"
+            className="max-h-36 w-full resize-none overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 sm:px-4 text-base sm:text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] shadow-sm transition-colors duration-150 focus:border-[var(--focus)] focus:bg-[var(--surface)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]/20 disabled:bg-[var(--surface-muted)] disabled:text-[var(--text-secondary)] disabled:cursor-not-allowed"
             aria-label="Chat message"
           />
         </div>
@@ -60,7 +68,7 @@ export default function ChatInput({
           type="button"
           onClick={onSend}
           disabled={!canSend}
-          className="flex h-11 w-11 sm:h-10 sm:w-10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-white shadow-sm transition-all duration-150 hover:brightness-95 active:scale-[0.95] disabled:bg-[var(--surface-muted)] disabled:text-[var(--text-secondary)] disabled:shadow-none disabled:active:scale-100"
+          className="flex h-11 w-11 sm:h-10 sm:w-10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-white shadow-sm transition-all duration-150 hover:brightness-95 active:scale-[0.95] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)] disabled:text-[var(--text-secondary)] disabled:shadow-none disabled:active:scale-100"
           aria-label={loading ? "Sending message" : "Send message"}
         >
           {loading ? (

@@ -17,6 +17,7 @@ import {
 import { checkPublicChatRateLimit } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashWidgetSessionToken, WIDGET_SESSION_TOKEN_PATTERN } from "@/lib/widget-conversation";
+import { isMissingSchemaFieldError } from "@/lib/supabase/error";
 
 const assistantIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -45,13 +46,23 @@ export async function POST(request: Request) {
     }
 
     const supabase = createAdminClient();
-    const { data: profile, error: profileError } = await supabase
+    let { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("id, assistant_id, business_name, allowed_domains")
+      .select("id, assistant_id, business_name, allowed_domains, handoff_enabled")
       .eq("assistant_id", assistantId)
       .maybeSingle();
+    if (isMissingSchemaFieldError(profileError)) {
+      ({ data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, assistant_id, business_name, allowed_domains")
+        .eq("assistant_id", assistantId)
+        .maybeSingle());
+    }
     if (profileError || !profile || !isAllowedAssistantOrigin(request, profile.allowed_domains)) {
       return publicChatJson(request, { error: "This assistant is not available from this website." }, { status: 403 }, profile?.allowed_domains);
+    }
+    if (profile.handoff_enabled === false) {
+      return publicChatJson(request, { error: "Support requests are disabled for this assistant." }, { status: 403 }, profile.allowed_domains);
     }
 
     const rateLimit = await checkPublicChatRateLimit(request, assistantId);

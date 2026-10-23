@@ -63,3 +63,19 @@ test("safe abstention can stream without claiming a source", async () => {
   assert.deepEqual(answer, { answer: GROUNDED_ANSWER_FALLBACK, sourceNumbers: [] });
   assert.equal(deltas.join(""), GROUNDED_ANSWER_FALLBACK);
 });
+
+test("configured fallback can stream only as an exact ungrounded abstention", async () => {
+  const fallback = "Please contact the support team for help.";
+  const deltas: string[] = [];
+  const answer = await generateGroundedAnswerStream(
+    mockAi([`{"sourceNumbers":[],"answer":${JSON.stringify(fallback)}}`]),
+    "Unsupported question",
+    source,
+    `If unsupported, use exactly: ${fallback}`,
+    (delta) => deltas.push(delta),
+    undefined,
+    fallback,
+  );
+  assert.deepEqual(answer, { answer: fallback, sourceNumbers: [] });
+  assert.equal(deltas.join(""), fallback);
+});

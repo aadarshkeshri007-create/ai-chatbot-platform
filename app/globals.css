@@ -6,19 +6,38 @@
 /* ── Global Theme Colors & Tokens ──────────────────────── */
 
 :root {
-  --background: #f7f7f4;
-  --foreground: #202c2a;
-  --surface: #ffffff;
-  --surface-muted: #f2f4f1;
-  --text-primary: #202c2a;
-  --text-secondary: #69736f;
-  --border: #e4e7e2;
-  --accent: #236b5b;
-  --accent-soft: #dcefe9;
-  --focus: #4b9b86;
-  --success: #2e7d5b;
-  --warning: #a86e24;
-  --error: #b94a4a;
+  color-scheme: light;
+  --background: #f1f5f2;
+  --foreground: #17241f;
+  --surface: #fcfdfc;
+  --surface-raised: #ffffff;
+  --surface-muted: #e8efeb;
+  --text-primary: #17241f;
+  --text-secondary: #52635b;
+  --border: #d5e0d9;
+  --accent: #2d725f;
+  --accent-link: #246b58;
+  --accent-soft: #dcebe4;
+  --focus: #2f866e;
+  --success: #256f51;
+  --success-soft: #e0efe6;
+  --warning: #875720;
+  --warning-soft: #f4ebdc;
+  --error: #a63f3c;
+  --error-soft: #f6e8e5;
+  --nav-background: #14251f;
+  --nav-border: #2a3b34;
+  --nav-text-primary: #eef5f0;
+  --nav-text-secondary: #aec1b6;
+  --nav-text-muted: #829a8e;
+  --nav-hover: rgb(255 255 255 / 6%);
+  --nav-active: #213b30;
+  --nav-accent: #a0d2b9;
+  --shadow-soft: 0 10px 30px rgb(17 39 30 / 5%);
+  --radius-control: 0.625rem;
+  --radius-panel: 0.875rem;
+  --font-sans-ui: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
+  --font-mono-ui: var(--font-geist-mono, ui-monospace, monospace);
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
@@ -26,19 +45,34 @@
 }
 
 .dark {
-  --background: #171b1a;
-  --foreground: #f1f3f0;
-  --surface: #222826;
-  --surface-muted: #1d2321;
-  --text-primary: #f1f3f0;
-  --text-secondary: #adb8b2;
-  --border: #343d39;
-  --accent: #78b6a0;
-  --accent-soft: #29483f;
-  --focus: #78b6a0;
-  --success: #79b995;
-  --warning: #e2ae68;
-  --error: #e58b8b;
+  color-scheme: dark;
+  --background: #0e1714;
+  --foreground: #e7f0ea;
+  --surface: #15211c;
+  --surface-raised: #1b2923;
+  --surface-muted: #1b2b24;
+  --text-primary: #e7f0ea;
+  --text-secondary: #a8bbb0;
+  --border: #304139;
+  --accent: #286d57;
+  --accent-link: #a1d5ba;
+  --accent-soft: #203d31;
+  --focus: #92d0b2;
+  --success: #8bcaa3;
+  --success-soft: #193b2a;
+  --warning: #e9b66e;
+  --warning-soft: #40331e;
+  --error: #f09a91;
+  --error-soft: #432522;
+  --nav-background: #101b17;
+  --nav-border: #26362f;
+  --nav-text-primary: #e7f0ea;
+  --nav-text-secondary: #a8bbb0;
+  --nav-text-muted: #80978b;
+  --nav-hover: rgb(255 255 255 / 5%);
+  --nav-active: #20392e;
+  --nav-accent: #a1d5ba;
+  --shadow-soft: 0 12px 34px rgb(0 0 0 / 20%);
 }
 
 /* ── Viewport & Base Resets ────────────────────────────── */
@@ -53,8 +87,8 @@ html {
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans, Inter, ui-sans-serif, system-ui, -apple-system, sans-serif);
-  letter-spacing: -0.008em;
+  font-family: var(--font-sans-ui);
+  letter-spacing: -0.012em;
   min-height: 100%;
   min-height: 100dvh;
   overflow-x: clip;
@@ -79,6 +113,32 @@ body {
 .app-shell-surface {
   background: var(--surface);
   border-color: var(--border);
+}
+
+.workspace-surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+
+.control-surface {
+  background: var(--surface);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.code-surface {
+  background: #101b17;
+  color: #e5efe9;
+  font-family: var(--font-mono-ui);
+}
+
+.workspace-kicker {
+  color: var(--accent-link);
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 /*

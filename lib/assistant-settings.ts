@@ -1,3 +1,5 @@
+import { getAssistantBehavior } from "./assistant-behavior.ts";
+
 export const DEFAULT_BUSINESS_NAME = "Your Business";
 export const DEFAULT_ASSISTANT_NAME = "AI Support";
 export const DEFAULT_WELCOME_MESSAGE = "Hello! How can I assist you today?";
@@ -31,6 +33,12 @@ type AssistantSettingsRow = {
   suggested_questions?: unknown;
   response_style?: unknown;
   response_length?: unknown;
+  response_tone?: unknown;
+  response_language?: unknown;
+  unknown_answer_behavior?: unknown;
+  unknown_answer_message?: unknown;
+  handoff_enabled?: unknown;
+  handoff_intro?: unknown;
 };
 
 const valueOrFallback = (value: string | null | undefined, fallback: string) =>
@@ -61,6 +69,7 @@ export function resolveSuggestedQuestions(value: unknown): string[] {
 }
 
 export function getAssistantSettings(settings?: AssistantSettingsRow | null) {
+  const behavior = getAssistantBehavior(settings);
   return {
     businessName: valueOrFallback(settings?.business_name, DEFAULT_BUSINESS_NAME),
     assistantName: valueOrFallback(settings?.assistant_name, DEFAULT_ASSISTANT_NAME),
@@ -76,5 +85,6 @@ export function getAssistantSettings(settings?: AssistantSettingsRow | null) {
     responseLength: settings?.response_length === "short" || settings?.response_length === "detailed"
       ? settings.response_length
       : DEFAULT_RESPONSE_LENGTH,
+    ...behavior,
   };
 }

@@ -21,5 +21,5 @@ export default function WidgetPreviewHost({ assistantId }: { assistantId: string
     };
   }, [assistantId, validAssistantId]);
 
-  return <main className="min-h-screen bg-slate-50 p-4 text-sm text-slate-700 dark:bg-slate-950 dark:text-slate-200">{validAssistantId ? status : "A valid Assistant ID is required for this preview."}</main>;
+  return <main className="min-h-screen bg-[var(--background)] p-4 text-sm text-[var(--text-primary)] dark:bg-[var(--background)] dark:text-[var(--text-primary)]">{validAssistantId ? status : "A valid Assistant ID is required for this preview."}</main>;
 }

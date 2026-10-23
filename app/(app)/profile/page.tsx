@@ -6,10 +6,12 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import PageFrame from "@/components/PageFrame";
 import PageHeader from "@/components/PageHeader";
+import { getProfileName, normalizeProfileName, PROFILE_NAME_MAX_LENGTH } from "@/lib/profile-name";
 
 type UserInfo = {
     email: string;
     createdAt: string;
+    fullName: string;
 };
 
 export default function ProfilePage() {
@@ -23,6 +25,9 @@ export default function ProfilePage() {
     const [confirmPassword, setConfirmPassword] = useState("");
     const [passwordSaving, setPasswordSaving] = useState(false);
     const [passwordFeedback, setPasswordFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+    const [fullName, setFullName] = useState("");
+    const [nameSaving, setNameSaving] = useState(false);
+    const [nameFeedback, setNameFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
 
     useEffect(() => {
         const loadUser = async () => {
@@ -36,7 +41,9 @@ export default function ProfilePage() {
                 setUser({
                     email: user.email ?? "",
                     createdAt: user.created_at,
+                    fullName: getProfileName(user.user_metadata, user.email),
                 });
+                setFullName(getProfileName(user.user_metadata, user.email));
             }
 
             setLoading(false);
@@ -44,6 +51,35 @@ export default function ProfilePage() {
 
         loadUser();
     }, []);
+
+    const handleSaveProfileName = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setNameFeedback(null);
+        const nextName = normalizeProfileName(fullName);
+        if (!nextName) {
+            setNameFeedback({ kind: "error", message: `Enter a name with 1–${PROFILE_NAME_MAX_LENGTH} characters.` });
+            return;
+        }
+
+        setNameSaving(true);
+        try {
+            const supabase = createClient();
+            const { data, error } = await supabase.auth.updateUser({ data: { full_name: nextName } });
+            if (error || !data.user) {
+                setNameFeedback({ kind: "error", message: "Unable to save your name. Please try again." });
+                return;
+            }
+
+            const savedName = getProfileName(data.user.user_metadata, data.user.email);
+            setFullName(savedName);
+            setUser((current) => current ? { ...current, fullName: savedName } : current);
+            setNameFeedback({ kind: "success", message: "Your name has been saved." });
+        } catch {
+            setNameFeedback({ kind: "error", message: "Unable to save your name. Please try again." });
+        } finally {
+            setNameSaving(false);
+        }
+    };
 
     const handleLogout = async () => {
         setLogoutError("");
@@ -123,8 +159,7 @@ export default function ProfilePage() {
     /* ── Helpers ───────────────────────────────── */
 
     const getInitials = (email: string) => {
-        if (!email) return "U";
-        return email.charAt(0).toUpperCase();
+        return (user?.fullName || email || "U").charAt(0).toUpperCase();
     };
 
     const formatDate = (dateString: string) => {
@@ -144,7 +179,7 @@ export default function ProfilePage() {
     if (loading) {
         return (
             <div className="flex flex-1 items-center justify-center bg-[var(--background)]">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-teal-600 dark:border-slate-700 dark:border-t-teal-400" />
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--border)] border-t-teal-600 dark:border-[var(--border)] dark:border-t-teal-400" />
             </div>
         );
     }
@@ -156,7 +191,7 @@ export default function ProfilePage() {
                 <PageHeader
                     eyebrow="Account"
                     title="Profile"
-                    description="Review your account details, plan, and sign-in options."
+                    description="Manage the name shown on your account and your sign-in options."
                 />
 
                 {/* ── Profile card ─────────────────── */}
@@ -174,25 +209,13 @@ export default function ProfilePage() {
 
                         {/* Info */}
                         <div className="min-w-0 flex-1">
-                            <h2 className="text-lg font-semibold text-slate-900 truncate dark:text-slate-100">
-                                {user?.email
-                                    ? user.email.split("@")[0]
-                                    : "User"}
+                            <h2 className="text-lg font-semibold text-[var(--text-primary)] truncate dark:text-[var(--text-primary)]">
+                                {user?.fullName ?? "User"}
                             </h2>
-                            <p className="mt-0.5 text-sm text-slate-500 truncate dark:text-slate-400">
+                            <p className="mt-0.5 text-sm text-[var(--text-secondary)] truncate dark:text-[var(--text-secondary)]">
                                 {user?.email ?? "No email available"}
                             </p>
 
-                            <div className="mt-3 flex flex-wrap items-center gap-2">
-                                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                    Active
-                                </span>
-
-                                <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-                                    Free plan
-                                </span>
-                            </div>
                         </div>
                     </div>
                 </section>
@@ -201,43 +224,46 @@ export default function ProfilePage() {
                 <section className="mt-8">
                     <div className="mb-3">
                         <h3 className="text-base font-semibold text-[var(--text-primary)]">
-                            Account Information
+                            Account information
                         </h3>
                     </div>
 
                     <dl className="border-y border-[var(--border)] divide-y divide-[var(--border)]">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-5 py-3 sm:px-6 sm:py-3.5 gap-0.5 sm:gap-4">
-                            <dt className="text-xs sm:text-sm text-slate-500 shrink-0 dark:text-slate-400">Email</dt>
-                            <dd className="text-sm font-medium text-slate-900 truncate max-w-full dark:text-slate-100">
+                            <dt className="text-xs sm:text-sm text-[var(--text-secondary)] shrink-0 dark:text-[var(--text-secondary)]">Email</dt>
+                            <dd className="text-sm font-medium text-[var(--text-primary)] truncate max-w-full dark:text-[var(--text-primary)]">
                                 {user?.email ?? "—"}
                             </dd>
                         </div>
 
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-5 py-3 sm:px-6 sm:py-3.5 gap-0.5 sm:gap-4">
-                            <dt className="text-xs sm:text-sm text-slate-500 shrink-0 dark:text-slate-400">Status</dt>
-                            <dd className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-                                Active
-                            </dd>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-5 py-3 sm:px-6 sm:py-3.5 gap-0.5 sm:gap-4">
-                            <dt className="text-xs sm:text-sm text-slate-500 shrink-0 dark:text-slate-400">
+                            <dt className="text-xs sm:text-sm text-[var(--text-secondary)] shrink-0 dark:text-[var(--text-secondary)]">
                                 Member since
                             </dt>
-                            <dd className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                            <dd className="text-sm font-medium text-[var(--text-primary)] dark:text-[var(--text-primary)]">
                                 {user?.createdAt
                                     ? formatDate(user.createdAt)
                                     : "—"}
                             </dd>
                         </div>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-5 py-3 sm:px-6 sm:py-3.5 gap-0.5 sm:gap-4">
-                            <dt className="text-xs sm:text-sm text-slate-500 shrink-0 dark:text-slate-400">Plan</dt>
-                            <dd className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                                Free
-                            </dd>
-                        </div>
                     </dl>
+                </section>
+
+                <section className="mt-8 border-b border-[var(--border)] pb-7">
+                    <div className="mb-4">
+                        <h3 className="text-base font-semibold text-[var(--text-primary)]">Profile details</h3>
+                        <p className="mt-1 text-sm text-[var(--text-secondary)]">Your name appears on your account. Email is read-only here.</p>
+                    </div>
+                    <form onSubmit={handleSaveProfileName} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                        <label htmlFor="profile-full-name" className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm font-medium text-[var(--text-primary)]">
+                            Full name
+                            <input id="profile-full-name" value={fullName} onChange={(event) => setFullName(event.target.value)} maxLength={PROFILE_NAME_MAX_LENGTH} autoComplete="name" required className="min-h-11 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-base text-[var(--text-primary)] outline-none focus:border-[var(--focus)] focus:ring-2 focus:ring-[var(--focus)]/20" />
+                        </label>
+                        <button type="submit" disabled={nameSaving} className="min-h-11 shrink-0 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-wait disabled:opacity-60">
+                            {nameSaving ? "Saving…" : "Save name"}
+                        </button>
+                        {nameFeedback && <p role={nameFeedback.kind === "error" ? "alert" : "status"} className={`text-sm sm:basis-full ${nameFeedback.kind === "error" ? "text-[var(--error)]" : "text-[var(--success)]"}`}>{nameFeedback.message}</p>}
+                    </form>
                 </section>
 
                 <section className="mt-8 border-b border-[var(--border)] pb-7">
@@ -258,7 +284,7 @@ export default function ProfilePage() {
                             Confirm new password
                             <input type="password" autoComplete="new-password" minLength={8} required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="min-h-11 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-base text-[var(--text-primary)] outline-none focus:border-[var(--focus)] focus:ring-2 focus:ring-[var(--focus)]/20" />
                         </label>
-                        {passwordFeedback && <p role={passwordFeedback.kind === "error" ? "alert" : "status"} className={`text-sm sm:col-span-2 ${passwordFeedback.kind === "error" ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}>{passwordFeedback.message}</p>}
+                        {passwordFeedback && <p role={passwordFeedback.kind === "error" ? "alert" : "status"} className={`text-sm sm:col-span-2 ${passwordFeedback.kind === "error" ? "text-[var(--error)] dark:text-[var(--error)]" : "text-[var(--success)] dark:text-[var(--success)]"}`}>{passwordFeedback.message}</p>}
                         <div className="sm:col-span-2">
                             <button type="submit" disabled={passwordSaving} className="min-h-11 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-wait disabled:opacity-60">
                                 {passwordSaving ? "Updating…" : "Update password"}
@@ -278,32 +304,32 @@ export default function ProfilePage() {
                     <div className="border-y border-[var(--border)] divide-y divide-[var(--border)]">
                         <Link
                             href="/settings"
-                            className="flex min-h-[44px] items-center justify-between px-5 py-3 text-sm text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100 sm:px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
+                            className="flex min-h-[44px] items-center justify-between px-5 py-3 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--background)] hover:text-[var(--text-primary)] dark:text-[var(--text-secondary)] dark:hover:bg-[var(--surface-muted)] dark:hover:text-[var(--text-primary)] sm:px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--focus)]"
                         >
                             <span className="flex items-center gap-2.5">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-slate-400 dark:text-slate-500">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">
                                     <circle cx="12" cy="12" r="3" />
                                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                                 </svg>
                                 Settings
                             </span>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-slate-300 dark:text-slate-600">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-slate-300 dark:text-[var(--text-secondary)]">
                                 <polyline points="9 18 15 12 9 6" />
                             </svg>
                         </Link>
 
                         <Link
                             href="/upload"
-                            className="flex min-h-[44px] items-center justify-between px-5 py-3 text-sm text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100 sm:px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
+                            className="flex min-h-[44px] items-center justify-between px-5 py-3 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--background)] hover:text-[var(--text-primary)] dark:text-[var(--text-secondary)] dark:hover:bg-[var(--surface-muted)] dark:hover:text-[var(--text-primary)] sm:px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--focus)]"
                         >
                             <span className="flex items-center gap-2.5">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-slate-400 dark:text-slate-500">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">
                                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                                     <polyline points="14 2 14 8 20 8" />
                                 </svg>
                                 Knowledge Base
                             </span>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-slate-300 dark:text-slate-600">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-slate-300 dark:text-[var(--text-secondary)]">
                                 <polyline points="9 18 15 12 9 6" />
                             </svg>
                         </Link>
@@ -313,7 +339,7 @@ export default function ProfilePage() {
                 {/* ── Logout ──────────────────────── */}
                 <section className="mt-6 mb-10">
                     {logoutError && (
-                        <p role="alert" aria-live="assertive" className="mb-3 text-center text-sm text-red-600 dark:text-red-400">
+                        <p role="alert" aria-live="assertive" className="mb-3 text-center text-sm text-[var(--error)] dark:text-[var(--error)]">
                             {logoutError}
                         </p>
                     )}
@@ -321,12 +347,12 @@ export default function ProfilePage() {
                         type="button"
                         onClick={handleLogout}
                         disabled={loggingOut}
-                        className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-600 shadow-sm transition-all duration-150 hover:border-red-300 hover:bg-red-50 dark:border-red-900/50 dark:bg-slate-900 dark:text-red-400 dark:hover:border-red-800 dark:hover:bg-red-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl border border-[color-mix(in_srgb,var(--error)_25%,var(--border))] bg-[var(--surface)] px-5 py-3 text-sm font-semibold text-[var(--error)] shadow-sm transition-all duration-150 hover:border-[color-mix(in_srgb,var(--error)_45%,var(--border))] hover:bg-[var(--error-soft)] dark:border-[color-mix(in_srgb,var(--error)_35%,var(--border))] dark:bg-[var(--surface)] dark:text-[var(--error)] dark:hover:border-red-800 dark:hover:bg-red-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                         aria-label="Log out of your account"
                     >
                         {loggingOut ? (
                             <>
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-300 border-t-red-600 dark:border-red-500 dark:border-t-red-400" />
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[color-mix(in_srgb,var(--error)_45%,var(--border))] border-t-red-600 dark:border-red-500 dark:border-t-red-400" />
                                 Logging out…
                             </>
                         ) : (

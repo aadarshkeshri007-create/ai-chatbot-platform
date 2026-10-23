@@ -24,6 +24,12 @@ import {
   saveHandoffAccess,
 } from "@/lib/handoff-session";
 import { getHandoffPollOutcome } from "@/lib/handoff-resolution";
+import {
+  classifyPendingQuestion,
+  clearPendingQuestion,
+  readPendingQuestion,
+  savePendingQuestion,
+} from "@/lib/widget-pending";
 
 type Source = { label: string; document_id?: string; chunk_id?: string; chunk_index?: number };
 type ChatMessage = {
@@ -87,18 +93,69 @@ export default function WidgetFrame() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [streamingStarted, setStreamingStarted] = useState(false);
-  const [showHandoffForm, setShowHandoffForm] = useState(false);
-  const [handoffName, setHandoffName] = useState("");
-  const [handoffEmail, setHandoffEmail] = useState("");
-  const [handoffReason, setHandoffReason] = useState("The customer requested help from a human.");
-  const [handoffLoading, setHandoffLoading] = useState(false);
-  const [showLeadForm, setShowLeadForm] = useState(false);
-  const [leadName, setLeadName] = useState("");
-  const [leadEmail, setLeadEmail] = useState("");
-  const [leadQuestion, setLeadQuestion] = useState("");
-  const [leadLoading, setLeadLoading] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("supportai:widget-theme");
+      if (saved === "light" || saved === "dark") {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTheme(saved);
+      } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        setTheme("dark");
+      }
+    } catch {
+      // localStorage not accessible
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => {
+      try {
+        const saved = localStorage.getItem("supportai:widget-theme");
+        if (!saved) {
+          setTheme(e.matches ? "dark" : "light");
+        }
+      } catch {
+        setTheme(e.matches ? "dark" : "light");
+      }
+    };
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((current) => {
+      const next = current === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem("supportai:widget-theme", next);
+      } catch {
+        // localStorage not available
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.remove("light", "dark");
+      document.documentElement.classList.add(theme);
+    }
+  }, [theme]);
+
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactMessage, setContactMessage] = useState("");
+  const [contactNotice, setContactNotice] = useState("");
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [escalatedTurnId, setEscalatedTurnId] = useState<string | null>(null);
+
+  const [handoffEnabled, setHandoffEnabled] = useState(true);
+  const [handoffIntro, setHandoffIntro] = useState("You can send a request to the support team. A reply may not be immediate.");
   const [leadNotice, setLeadNotice] = useState("");
-  const leadSendingRef = useRef(false);
   const [handoffPollUnavailable, setHandoffPollUnavailable] = useState(false);
   const getHandoffAccessSnapshot = useCallback(() => {
     const saved = readSavedHandoffAccess(assistantId);
@@ -115,7 +172,7 @@ export default function WidgetFrame() {
     : localHandoffAccess;
   const [handoffNotice, setHandoffNotice] = useState("");
   const visibleHandoffNotice = handoffNotice ||
-    (handoffAccess ? "You're now chatting with a human support agent." : "");
+    (handoffAccess ? "Your support request is active. A team member may respond later." : "");
   const [seenHumanMessages, setSeenHumanMessages] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -136,6 +193,33 @@ export default function WidgetFrame() {
     }
   }, [parentOrigin]);
 
+  const RESTORE_TIMEOUT_MS = 15_000;
+  const [restoreState, setRestoreState] = useState<"loading" | "ready" | "failed">("loading");
+  const [restoreNotice, setRestoreNotice] = useState("");
+  const restoreRequestIdRef = useRef("");
+  const restoreTimerRef = useRef<number | undefined>(undefined);
+
+  /**
+   * Ask the host-page loader to restore this visitor's conversation. The loader
+   * owns the opaque resume credential; this frame never sees it. Without a
+   * parent (standalone preview) there is nothing to restore, so we do not
+   * leave the widget in a loading state.
+   */
+  const requestRestore = useCallback(() => {
+    window.clearTimeout(restoreTimerRef.current);
+    if (!parentOrigin || window.parent === window) {
+      setRestoreState("ready");
+      return;
+    }
+    setRestoreState("loading");
+    setRestoreNotice("");
+    restoreRequestIdRef.current = crypto.randomUUID();
+    postToParent({ type: "supportai:restore-request", requestId: restoreRequestIdRef.current, assistantId });
+    restoreTimerRef.current = window.setTimeout(() => {
+      setRestoreState((current) => (current === "loading" ? "failed" : current));
+    }, RESTORE_TIMEOUT_MS);
+  }, [assistantId, parentOrigin, postToParent]);
+
   /**
    * Clear the visitor's local handoff session without modifying any
    * server-side record. The handoff_requests row remains open in the
@@ -146,14 +230,20 @@ export default function WidgetFrame() {
    */
   const clearLocalSession = useCallback(() => {
     clearHandoffAccess(localStorage);
+    clearPendingQuestion(assistantId, localStorage);
+    retryRef.current = null;
+    window.clearTimeout(restoreTimerRef.current);
+    setRestoreState("ready");
+    setRestoreNotice("");
     setLocalHandoffAccess(null);
     setHandoffPollUnavailable(false);
     setHandoffNotice("");
-    setShowHandoffForm(false);
+    setShowContactForm(false);
+    setEscalatedTurnId(null);
     setSeenHumanMessages([]);
     setConversationId("");
     setMessages([{ role: "assistant", content: welcomeMessage }]);
-  }, [welcomeMessage]);
+  }, [assistantId, welcomeMessage]);
   const resetLocalSession = useCallback(() => {
     postToParent({ type: "supportai:rotate-visitor-session" });
     clearLocalSession();
@@ -162,28 +252,61 @@ export default function WidgetFrame() {
   useEffect(() => {
     const receiveMessage = (event: MessageEvent) => {
       if (event.source !== window.parent || event.origin !== parentOrigin) return;
-      if (event.data?.type === "supportai:restore-response" && event.data.ok === true) {
-        const payload = event.data.payload as { conversation_id?: unknown; messages?: unknown };
-        if (typeof payload.conversation_id === "string" && Array.isArray(payload.messages)) {
-          const restored = payload.messages.flatMap((item) => {
-            if (!item || typeof item !== "object" || Array.isArray(item)) return [];
-            const row = item as Record<string, unknown>;
-            if ((row.role !== "user" && row.role !== "assistant") || typeof row.content !== "string") return [];
-            const sources = Array.isArray(row.sources) ? row.sources.flatMap((source) =>
-              source && typeof source === "object" && !Array.isArray(source) && typeof (source as { label?: unknown }).label === "string"
-                ? [{ label: (source as { label: string }).label }]
-                : [],
-            ) : [];
-            return [{ role: row.role, content: row.content, sources } as ChatMessage];
-          });
-          if (restored.length) {
-            setConversationId(payload.conversation_id);
-            setMessages([{ role: "assistant", content: welcomeMessage }, ...restored]);
+      if (event.data?.type === "supportai:restore-response") {
+        if (event.data.requestId !== restoreRequestIdRef.current) return;
+        window.clearTimeout(restoreTimerRef.current);
+        if (event.data.ok !== true || !event.data.payload || typeof event.data.payload !== "object") {
+          // Never fall back to an empty chat on failure: the stored conversation reference is untouched
+          // and the visitor can retry or explicitly start a new conversation.
+          setRestoreState("failed");
+          return;
+        }
+        const payload = event.data.payload as {
+          conversation_id?: unknown; messages?: unknown; expired?: unknown; escalation_request_id?: unknown;
+        };
+        const restored = Array.isArray(payload.messages) ? payload.messages.flatMap((item) => {
+          if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+          const row = item as Record<string, unknown>;
+          if ((row.role !== "user" && row.role !== "assistant") || typeof row.content !== "string") return [];
+          const sources = Array.isArray(row.sources) ? row.sources.flatMap((source) =>
+            source && typeof source === "object" && !Array.isArray(source) && typeof (source as { label?: unknown }).label === "string"
+              ? [{ label: (source as { label: string }).label }]
+              : [],
+          ) : [];
+          return [{
+            role: row.role,
+            content: row.content,
+            sources,
+            ...(typeof row.request_id === "string" ? { requestId: row.request_id } : {}),
+          } as ChatMessage];
+        }) : [];
+        const pending = readPendingQuestion(assistantId, localStorage);
+        if (payload.expired === true) {
+          clearPendingQuestion(assistantId, localStorage);
+          setRestoreNotice("Your previous conversation has expired. Ask a question to start a new one.");
+        } else if (restored.length && typeof payload.conversation_id === "string") {
+          setConversationId(payload.conversation_id);
+          setMessages([{ role: "assistant", content: welcomeMessage }, ...restored]);
+          if (typeof payload.escalation_request_id === "string") setEscalatedTurnId(payload.escalation_request_id);
+        }
+        if (pending && payload.expired !== true) {
+          if (classifyPendingQuestion(pending, restored.map((item) => ({ role: item.role, request_id: item.requestId }))) === "answered") {
+            clearPendingQuestion(assistantId, localStorage);
+          } else {
+            // The turn was never saved. Offer it back for an idempotent resend (same request id)
+            // instead of submitting it automatically.
+            retryRef.current = { requestId: pending.requestId, message: pending.message };
+            setMessage((current) => current || pending.message);
+            setRestoreNotice("Your last message may not have been sent. It's back in the box so you can send it again.");
           }
         }
+        setRestoreState("ready");
       } else if (event.data?.type === "supportai:brand-config") {
         const nextColor = normalizeBrandColor(event.data.brand_color);
         if (nextColor) setBrandColor(nextColor);
+      } else if (event.data?.type === "supportai:handoff-config") {
+        if (typeof event.data.handoff_enabled === "boolean") setHandoffEnabled(event.data.handoff_enabled);
+        if (typeof event.data.handoff_intro === "string" && event.data.handoff_intro.trim()) setHandoffIntro(event.data.handoff_intro.slice(0, 500));
       } else if (event.data?.type === "supportai:reset-session") {
         clearLocalSession();
       }
@@ -192,10 +315,10 @@ export default function WidgetFrame() {
     postToParent({ type: "supportai:ready" });
     if (!restoreRequestedRef.current) {
       restoreRequestedRef.current = true;
-      postToParent({ type: "supportai:restore-request", requestId: crypto.randomUUID(), assistantId });
+      requestRestore();
     }
     return () => window.removeEventListener("message", receiveMessage);
-  }, [assistantId, clearLocalSession, parentOrigin, postToParent, welcomeMessage]);
+  }, [assistantId, clearLocalSession, parentOrigin, postToParent, requestRestore, welcomeMessage]);
   const debugWidget = (stage: string, details: Record<string, string | number>) => {
     if (typeof window !== "undefined" &&
       (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
@@ -206,6 +329,20 @@ export default function WidgetFrame() {
   useEffect(() => {
     messagesRef.current?.scrollTo(0, messagesRef.current.scrollHeight);
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (showContactForm) {
+          setShowContactForm(false);
+        } else {
+          postToParent({ type: "supportai:close" });
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [postToParent, showContactForm]);
 
   useEffect(() => {
     messagesRef.current?.scrollTo(0, messagesRef.current.scrollHeight);
@@ -225,6 +362,7 @@ export default function WidgetFrame() {
     const requestId = retryRef.current?.message === cleanMessage ? retryRef.current.requestId : crypto.randomUUID();
     if (retryRef.current?.message !== cleanMessage) retryRef.current = null;
     setMessages((current) => [...current, { role: "user", content: cleanMessage, requestId }]);
+    savePendingQuestion(assistantId, { requestId, message: cleanMessage }, localStorage);
     setMessage("");
     setError("");
     setLoading(true);
@@ -338,9 +476,15 @@ export default function WidgetFrame() {
       });
       if (typeof payload.conversation_id === "string") setConversationId(payload.conversation_id);
       retryRef.current = null;
-      if (payload.handoff_available === true ||
-        payload.response === "I’m sorry, I don’t have enough information in my knowledge base to answer that question.") {
-        setShowHandoffForm(true);
+      clearPendingQuestion(assistantId, localStorage);
+      const isAbstention =
+        payload.handoff_available === true ||
+        payload.response === "I’m sorry, but the knowledge base doesn't contain enough information to answer that. Please contact the support team for help." ||
+        payload.response === "I'm sorry, but the knowledge base doesn't contain enough information to answer that. You can send a request to the support team for help." ||
+        payload.response === "I’m sorry, I don’t have enough information in my knowledge base to answer that question.";
+      if (isAbstention) {
+        setEscalatedTurnId(requestId);
+        if (!contactMessage) setContactMessage(cleanMessage);
       }
     } catch (requestError) {
       retryRef.current = { requestId, message: cleanMessage };
@@ -355,114 +499,112 @@ export default function WidgetFrame() {
     }
   };
 
-  const submitHandoff = async (event: FormEvent<HTMLFormElement>) => {
+  const submitContactSupport = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (handoffLoading || !handoffReason.trim()) return;
-    if (handoffEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(handoffEmail.trim())) {
-      setHandoffNotice("Please enter a valid email address or leave it blank.");
+    if (contactSubmitting) return;
+    const cleanEmail = contactEmail.trim();
+    const cleanMsg = contactMessage.trim();
+    const cleanNm = contactName.trim();
+
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setContactNotice("Please enter a valid email address so our team can follow up.");
       return;
     }
-    setHandoffLoading(true);
-    setHandoffNotice("");
+    if (!cleanMsg) {
+      setContactNotice("Please enter your message or question.");
+      return;
+    }
+
+    setContactSubmitting(true);
+    setContactNotice("");
+
     try {
       const requestId = crypto.randomUUID();
-      debugWidget("handoff-send", { requestId, hasParentOrigin: parentOrigin ? 1 : 0 });
-      const payload = await new Promise<Record<string, unknown>>((resolve, reject) => {
-        const timeout = window.setTimeout(() => {
-          window.removeEventListener("message", onMessage);
-          reject(new Error("The handoff request timed out."));
-        }, WIDGET_REQUEST_TIMEOUT_MS + 1000);
-        function onMessage(event: MessageEvent) {
-          if (!isTrustedWidgetMessage(event.source, window.parent, event.origin, parentOrigin) ||
-            event.data?.type !== "supportai:handoff-response" ||
-            event.data.requestId !== requestId) return;
-          debugWidget("handoff-response-received", { requestId, ok: event.data.ok ? 1 : 0 });
-          window.clearTimeout(timeout);
-          window.removeEventListener("message", onMessage);
-          if (!event.data.ok) reject(new Error("Unable to submit your request right now."));
-          else resolve(event.data.payload as Record<string, unknown>);
-        }
-        window.addEventListener("message", onMessage);
-        postToParent({
-          type: "supportai:handoff-request",
-          requestId,
-          assistantId,
-          customerName: handoffName.trim() || undefined,
-          customerEmail: handoffEmail.trim() || undefined,
-          reason: handoffReason.trim(),
-          conversationId,
-          transcript: messages.slice(-50).map(({ role, content }) => ({ role, content })),
-        });
-      });
-      if (typeof payload.handoff_id !== "string" || typeof payload.access_token !== "string") {
-        throw new Error("Unable to submit your request right now.");
-      }
-      const access = { id: payload.handoff_id, token: payload.access_token };
-      setLocalHandoffAccess(access);
-      saveHandoffAccess(assistantId, access, localStorage);
-      setHandoffPollUnavailable(false);
-      setHandoffNotice("You're now chatting with a human support agent.");
-      setShowHandoffForm(false);
-    } catch (handoffError) {
-      setHandoffNotice(handoffError instanceof Error ? handoffError.message : "Unable to submit your request right now.");
-    } finally {
-      setHandoffLoading(false);
-    }
-  };
+      if (handoffEnabled) {
+        // Submit handoff request for live support inbox
+        const payload = await new Promise<Record<string, unknown>>((resolve, reject) => {
+          const timeout = window.setTimeout(() => {
+            window.removeEventListener("message", onMessage);
+            reject(new Error("The support request timed out. Please try again."));
+          }, WIDGET_REQUEST_TIMEOUT_MS + 1000);
 
-  const submitLead = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (leadSendingRef.current || !assistantId) return;
-    const cleanName = leadName.trim();
-    const cleanEmail = leadEmail.trim();
-    const cleanQuestion = leadQuestion.trim();
-    if (!cleanName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail) || !cleanQuestion) {
-      setLeadNotice("Please enter your name, a valid email, and your question.");
-      return;
-    }
-
-    leadSendingRef.current = true;
-    setLeadLoading(true);
-    setLeadNotice("");
-    const requestId = crypto.randomUUID();
-    try {
-      const result = await new Promise<{ success?: boolean; message?: string }>((resolve, reject) => {
-        const timeout = window.setTimeout(() => {
-          window.removeEventListener("message", onMessage);
-          reject(new Error("Lead submission is temporarily unavailable. Please try again."));
-        }, WIDGET_REQUEST_TIMEOUT_MS + 1000);
-        function onMessage(event: MessageEvent) {
-          if (!isTrustedWidgetMessage(event.source, window.parent, event.origin, parentOrigin) ||
-            event.data?.type !== "supportai:lead-response" || event.data.requestId !== requestId) return;
-          window.clearTimeout(timeout);
-          window.removeEventListener("message", onMessage);
-          if (event.data.ok === true && event.data.payload && typeof event.data.payload === "object") {
-            resolve(event.data.payload as { success?: boolean; message?: string });
-          } else {
-            reject(new Error(typeof event.data.error === "string" ? event.data.error : "Lead submission is temporarily unavailable. Please try again."));
+          function onMessage(e: MessageEvent) {
+            if (!isTrustedWidgetMessage(e.source, window.parent, e.origin, parentOrigin) ||
+              e.data?.type !== "supportai:handoff-response" ||
+              e.data.requestId !== requestId) return;
+            window.clearTimeout(timeout);
+            window.removeEventListener("message", onMessage);
+            if (!e.data.ok) reject(new Error("Unable to submit your support request right now."));
+            else resolve(e.data.payload as Record<string, unknown>);
           }
+          window.addEventListener("message", onMessage);
+          postToParent({
+            type: "supportai:handoff-request",
+            requestId,
+            assistantId,
+            customerName: cleanNm || undefined,
+            customerEmail: cleanEmail,
+            reason: cleanMsg,
+            conversationId,
+            transcript: messages.slice(-50).map(({ role, content }) => ({ role, content })),
+          });
+        });
+
+        if (typeof payload.handoff_id === "string" && typeof payload.access_token === "string") {
+          const access = { id: payload.handoff_id, token: payload.access_token };
+          setLocalHandoffAccess(access);
+          saveHandoffAccess(assistantId, access, localStorage);
+          setHandoffPollUnavailable(false);
+          setHandoffNotice("Your message has been sent to our support team. We'll follow up shortly.");
         }
-        window.addEventListener("message", onMessage);
+
+        // Also submit lead in background if configured
         postToParent({
           type: "supportai:lead-request",
-          requestId,
+          requestId: crypto.randomUUID(),
           assistantId,
-          name: cleanName,
+          name: cleanNm || "Website visitor",
           email: cleanEmail,
-          question: cleanQuestion,
+          question: cleanMsg,
         });
-      });
-      if (result.success !== true) throw new Error("Lead submission is temporarily unavailable. Please try again.");
-      setLeadNotice("Thanks! Your details were submitted successfully.");
-      setLeadName("");
-      setLeadEmail("");
-      setLeadQuestion("");
-      setShowLeadForm(false);
-    } catch (submitError) {
-      setLeadNotice(submitError instanceof Error ? submitError.message : "Lead submission is temporarily unavailable. Please try again.");
+
+        setShowContactForm(false);
+      } else {
+        // Fallback to direct lead submission if handoff is disabled
+        const leadResult = await new Promise<{ success?: boolean }>((resolve, reject) => {
+          const timeout = window.setTimeout(() => {
+            window.removeEventListener("message", onMsg);
+            reject(new Error("Lead submission timed out. Please try again."));
+          }, WIDGET_REQUEST_TIMEOUT_MS + 1000);
+
+          function onMsg(e: MessageEvent) {
+            if (!isTrustedWidgetMessage(e.source, window.parent, e.origin, parentOrigin) ||
+              e.data?.type !== "supportai:lead-response" || e.data.requestId !== requestId) return;
+            window.clearTimeout(timeout);
+            window.removeEventListener("message", onMsg);
+            if (e.data.ok === true) resolve(e.data.payload as { success?: boolean });
+            else reject(new Error(typeof e.data.error === "string" ? e.data.error : "Unable to submit your details right now."));
+          }
+          window.addEventListener("message", onMsg);
+          postToParent({
+            type: "supportai:lead-request",
+            requestId,
+            assistantId,
+            name: cleanNm || "Website visitor",
+            email: cleanEmail,
+            question: cleanMsg,
+          });
+        });
+
+        if (leadResult.success) {
+          setLeadNotice("Thanks! Your message has been sent to our team.");
+          setShowContactForm(false);
+        }
+      }
+    } catch (err) {
+      setContactNotice(err instanceof Error ? err.message : "Unable to send your message right now.");
     } finally {
-      leadSendingRef.current = false;
-      setLeadLoading(false);
+      setContactSubmitting(false);
     }
   };
 
@@ -535,7 +677,7 @@ export default function WidgetFrame() {
 
   return (
     <main
-      className="widget"
+      className={`widget ${theme === "dark" ? "dark" : "light"}`}
       style={{
         "--widget-brand": brandColor,
         "--widget-brand-text": getBrandTextColor(brandColor),
@@ -546,103 +688,108 @@ export default function WidgetFrame() {
         *, *::before, *::after { box-sizing: border-box; }
         html, body { height: 100%; margin: 0; overflow: hidden; }
         body {
-          font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          font-family: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
           /* Prevent rubber-band scroll on the host page when iframe is focused */
           overscroll-behavior: none;
         }
-        :root, .widget {
-          --widget-bg: #f7f7f4;
-          --widget-bubble-bg: #ffffff;
-          --widget-bubble-border: #e4e7e2;
-          --widget-assistant-text: #1e293b;
-          --widget-assistant-heading: #0f172a;
-          --widget-assistant-muted: #475569;
-          --widget-code-bg: #eef1ed;
-          --widget-code-text: #1e293b;
-          --widget-human-bg: #e4f2ec;
-          --widget-human-border: #b8d8ca;
-          --widget-human-text: #1e3a2f;
-          --widget-system-bg: #eef3f1;
-          --widget-system-border: #d7e2dd;
-          --widget-system-text: #3f4e48;
-          --widget-input-bg: #ffffff;
-          --widget-input-border: #cbd4cc;
-          --widget-input-text: #1e293b;
-          --widget-source-bg: #e8ece7;
-          --widget-source-text: #1e293b;
-          --widget-source-label: #475569;
-          --widget-error-bg: #fceded;
-          --widget-error-border: #edc4c4;
-          --widget-error-text: #9e3f3f;
-          --widget-status-bg: #e7f4ed;
-          --widget-status-border: #b8d8ca;
-          --widget-status-text: #276847;
+        :root, .widget, .widget.light, :root.light .widget {
+          --widget-bg: #f1f5f2;
+          --widget-bubble-bg: #fcfdfc;
+          --widget-bubble-border: #d5e0d9;
+          --widget-assistant-text: #17241f;
+          --widget-assistant-heading: #17241f;
+          --widget-assistant-muted: #52635b;
+          --widget-code-bg: #e8efeb;
+          --widget-code-text: #17241f;
+          --widget-human-bg: #dcebe4;
+          --widget-human-border: #b6d3c4;
+          --widget-human-text: #20382e;
+          --widget-system-bg: #e8efeb;
+          --widget-system-border: #d5e0d9;
+          --widget-system-text: #52635b;
+          --widget-input-bg: #fcfdfc;
+          --widget-input-border: #c2d0c7;
+          --widget-input-text: #17241f;
+          --widget-source-bg: #e8efeb;
+          --widget-source-text: #17241f;
+          --widget-source-label: #52635b;
+          --widget-error-bg: #f6e8e5;
+          --widget-error-border: #e8c0ba;
+          --widget-error-text: #a63f3c;
+          --widget-status-bg: #e0efe6;
+          --widget-status-border: #b6d3c4;
+          --widget-status-text: #256f51;
         }
         :root.dark .widget,
-        .dark .widget {
-          --widget-bg: #171b1a;
-          --widget-bubble-bg: #222826;
-          --widget-bubble-border: #343d39;
-          --widget-assistant-text: #f1f3f0;
-          --widget-assistant-heading: #ffffff;
-          --widget-assistant-muted: #adb8b2;
-          --widget-code-bg: #2b3330;
-          --widget-code-text: #f1f3f0;
-          --widget-human-bg: #1d362e;
-          --widget-human-border: #2d5548;
-          --widget-human-text: #e4f2ec;
-          --widget-system-bg: #1d2321;
-          --widget-system-border: #2e3834;
-          --widget-system-text: #adb8b2;
-          --widget-input-bg: #1d2321;
-          --widget-input-border: #343d39;
-          --widget-input-text: #f1f3f0;
-          --widget-source-bg: #2b3330;
-          --widget-source-text: #f1f3f0;
-          --widget-source-label: #adb8b2;
-          --widget-error-bg: #2d1818;
-          --widget-error-border: #5c2424;
-          --widget-error-text: #fca5a5;
-          --widget-status-bg: #132b21;
-          --widget-status-border: #1e4a37;
-          --widget-status-text: #86efac;
+        .dark .widget,
+        .widget.dark {
+          --widget-bg: #0e1714;
+          --widget-bubble-bg: #15211c;
+          --widget-bubble-border: #304139;
+          --widget-assistant-text: #e7f0ea;
+          --widget-assistant-heading: #fcfdfc;
+          --widget-assistant-muted: #a8bbb0;
+          --widget-code-bg: #1b2b24;
+          --widget-code-text: #e7f0ea;
+          --widget-human-bg: #203d31;
+          --widget-human-border: #355b49;
+          --widget-human-text: #dcebe4;
+          --widget-system-bg: #15211c;
+          --widget-system-border: #304139;
+          --widget-system-text: #a8bbb0;
+          --widget-input-bg: #15211c;
+          --widget-input-border: #304139;
+          --widget-input-text: #e7f0ea;
+          --widget-source-bg: #1b2b24;
+          --widget-source-text: #e7f0ea;
+          --widget-source-label: #a8bbb0;
+          --widget-error-bg: #432522;
+          --widget-error-border: #6c3933;
+          --widget-error-text: #f09a91;
+          --widget-status-bg: #193b2a;
+          --widget-status-border: #31583f;
+          --widget-status-text: #8bcaa3;
         }
         @media (prefers-color-scheme: dark) {
-          :root:not(.light) .widget {
-            --widget-bg: #171b1a;
-            --widget-bubble-bg: #222826;
-            --widget-bubble-border: #343d39;
-            --widget-assistant-text: #f1f3f0;
-            --widget-assistant-heading: #ffffff;
-            --widget-assistant-muted: #adb8b2;
-            --widget-code-bg: #2b3330;
-            --widget-code-text: #f1f3f0;
-            --widget-human-bg: #1d362e;
-            --widget-human-border: #2d5548;
-            --widget-human-text: #e4f2ec;
-            --widget-system-bg: #1d2321;
-            --widget-system-border: #2e3834;
-            --widget-system-text: #adb8b2;
-            --widget-input-bg: #1d2321;
-            --widget-input-border: #343d39;
-            --widget-input-text: #f1f3f0;
-            --widget-source-bg: #2b3330;
-            --widget-source-text: #f1f3f0;
-            --widget-source-label: #adb8b2;
-            --widget-error-bg: #2d1818;
-            --widget-error-border: #5c2424;
-            --widget-error-text: #fca5a5;
-            --widget-status-bg: #132b21;
-            --widget-status-border: #1e4a37;
-            --widget-status-text: #86efac;
+          :root:not(.light) .widget:not(.light) {
+            --widget-bg: #0e1714;
+            --widget-bubble-bg: #15211c;
+            --widget-bubble-border: #304139;
+            --widget-assistant-text: #e7f0ea;
+            --widget-assistant-heading: #fcfdfc;
+            --widget-assistant-muted: #a8bbb0;
+            --widget-code-bg: #1b2b24;
+            --widget-code-text: #e7f0ea;
+            --widget-human-bg: #203d31;
+            --widget-human-border: #355b49;
+            --widget-human-text: #dcebe4;
+            --widget-system-bg: #15211c;
+            --widget-system-border: #304139;
+            --widget-system-text: #a8bbb0;
+            --widget-input-bg: #15211c;
+            --widget-input-border: #304139;
+            --widget-input-text: #e7f0ea;
+            --widget-source-bg: #1b2b24;
+            --widget-source-text: #e7f0ea;
+            --widget-source-label: #a8bbb0;
+            --widget-error-bg: #432522;
+            --widget-error-border: #6c3933;
+            --widget-error-text: #f09a91;
+            --widget-status-bg: #193b2a;
+            --widget-status-border: #31583f;
+            --widget-status-text: #8bcaa3;
           }
-          :root:not(.light) .human-sender { color: #79b995; }
-          :root:not(.light) input:focus { outline-color: #78b6a0; }
-          :root:not(.light) .widget-markdown a { color: #5eead4; }
+          :root:not(.light) .widget:not(.light) .human-sender { color: #a1d5ba; }
+          :root:not(.light) .widget:not(.light) input:focus { outline-color: #92d0b2; }
+          :root:not(.light) .widget:not(.light) .widget-markdown a { color: #a1d5ba; }
+          :root:not(.light) .widget:not(.light) .handoff-btn { color: #a1d5ba; }
+          :root:not(.light) .widget:not(.light) .handoff-compose-note { color: #a8bbb0; }
         }
         :root.dark .widget-markdown a,
+        :root.dark .handoff-btn,
+        .dark .handoff-btn,
         .dark .widget-markdown a {
-          color: #5eead4;
+          color: #a1d5ba;
         }
         .widget {
           display: flex; flex-direction: column;
@@ -675,7 +822,7 @@ export default function WidgetFrame() {
           transition: background 150ms;
         }
         .header-btn:hover { background: rgba(255,255,255,.15); }
-        .header-btn:focus-visible { outline: 3px solid #78b6a0; outline-offset: 2px; }
+        .header-btn:focus-visible { outline: 3px solid #92d0b2; outline-offset: 2px; }
         .close-btn {
           flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
@@ -686,7 +833,7 @@ export default function WidgetFrame() {
           transition: background 150ms;
         }
         .close-btn:hover { background: rgba(255,255,255,.15); }
-        .close-btn:focus-visible { outline: 3px solid #78b6a0; outline-offset: 2px; }
+        .close-btn:focus-visible { outline: 3px solid #92d0b2; outline-offset: 2px; }
         .messages {
           flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
@@ -727,8 +874,8 @@ export default function WidgetFrame() {
           color: var(--widget-source-label); font-size: 11px; font-weight: 700;
         }
         .human-sender { color: #2e7d5b; }
-        :root.dark .human-sender, .dark .human-sender { color: #79b995; }
-        .sender-avatar { font-size: 13px; line-height: 1; }
+        :root.dark .human-sender, .dark .human-sender { color: #a1d5ba; }
+        .sender-avatar { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; flex-shrink: 0; }
         .widget-markdown {
           min-width: 0;
           overflow-wrap: anywhere;
@@ -794,7 +941,7 @@ export default function WidgetFrame() {
         }
         .widget-markdown pre code {
           background: none !important;
-          color: #f1f3f0 !important;
+          color: #e7f0ea !important;
           font-size: .85em;
         }
         .sources {
@@ -825,8 +972,21 @@ export default function WidgetFrame() {
           border-top: 1px solid var(--widget-status-border);
           font-size: 12px;
         }
+        .restore-status { display: flex; align-items: center; gap: 6px; padding: 18px 4px; color: var(--widget-source-label); font-size: 13px; }
+        .restore-status .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: #6c8178; animation: supportai-dot 1.2s ease-in-out infinite; }
+        .restore-status .typing-dot:nth-child(2) { animation-delay: .16s; } .restore-status .typing-dot:nth-child(3) { animation-delay: .32s; }
+        .restore-error { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; font-size: 12px; color: var(--widget-error-text); background: var(--widget-error-bg); border-top: 1px solid var(--widget-error-border); }
+        .restore-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .restore-actions button { min-height: 32px; padding: 0 12px; border: 1px solid currentColor; border-radius: 8px; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+        .restore-actions button:focus-visible { outline: 3px solid #92d0b2; outline-offset: 2px; }
+        @media (prefers-reduced-motion: reduce) { .restore-status .typing-dot { animation: none; opacity: .75; } }
         .handoff-compose-note {
-          flex-shrink: 0; padding: 7px 12px 0;
+          flex-shrink: 0;
+          padding: 8px 14px 4px;
+          margin: 0;
+          white-space: normal;
+          overflow-wrap: break-word;
+          word-break: break-word;
           color: var(--widget-source-label);
           background: var(--widget-bubble-bg);
           font-size: 12px; line-height: 1.4;
@@ -851,8 +1011,8 @@ export default function WidgetFrame() {
           font-size: 16px;
           -webkit-appearance: none;
         }
-        input:focus { outline: 3px solid #0f172a; outline-offset: -1px; border-color: var(--widget-brand); }
-        :root.dark input:focus, .dark input:focus { outline-color: #78b6a0; }
+        input:focus { outline: 3px solid #17241f; outline-offset: -1px; border-color: var(--widget-brand); }
+        :root.dark input:focus, .dark input:focus { outline-color: #92d0b2; }
         input:disabled { opacity: .7; cursor: not-allowed; }
         button[type=submit] {
           flex-shrink: 0;
@@ -864,7 +1024,7 @@ export default function WidgetFrame() {
           -webkit-appearance: none;
         }
         button[type=submit]:disabled { cursor: wait; opacity: .55; }
-        button[type=submit]:focus-visible { outline: 3px solid #78b6a0; outline-offset: 2px; }
+        button[type=submit]:focus-visible { outline: 3px solid #92d0b2; outline-offset: 2px; }
         .typing { display: flex; align-items: center; gap: 5px; min-height: 36px; width: max-content; color: var(--widget-source-label); }
         .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: #6c8178; animation: supportai-dot 1.2s ease-in-out infinite; }
         .typing-dot:nth-child(2) { animation-delay: .16s; } .typing-dot:nth-child(3) { animation-delay: .32s; }
@@ -877,10 +1037,10 @@ export default function WidgetFrame() {
           background: var(--widget-bubble-bg);
           color: var(--widget-brand-link);
           cursor: pointer;
-          font: 600 13px system-ui, sans-serif; text-align: left;
+          font: 600 13px var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif); text-align: left;
         }
         .handoff-btn:focus-visible, .handoff-actions button:focus-visible {
-          outline: 3px solid #78b6a0; outline-offset: -2px;
+          outline: 3px solid #92d0b2; outline-offset: -2px;
         }
         .handoff-form {
           display: flex; flex-direction: column; gap: 8px; padding: 12px;
@@ -908,7 +1068,157 @@ export default function WidgetFrame() {
           background: var(--widget-source-bg);
           color: var(--widget-source-text);
         }
-        .handoff-actions button:disabled { opacity: .55; cursor: wait; }
+                .handoff-actions button:disabled { opacity: .55; cursor: wait; }
+        .theme-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .theme-btn svg {
+          stroke: currentColor;
+          display: block;
+        }
+        .escalation-prompt {
+          margin: 6px 0 12px;
+          padding: 10px 14px;
+          border-radius: 10px;
+          background: var(--widget-bubble-bg);
+          border: 1px dashed var(--widget-bubble-border);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          font-size: 13px;
+        }
+        .escalation-prompt-text {
+          color: var(--widget-assistant-muted);
+          line-height: 1.4;
+          font-weight: 500;
+        }
+        .escalation-prompt-btn {
+          flex-shrink: 0;
+          border: 1px solid var(--widget-brand-link);
+          background: transparent;
+          color: var(--widget-brand-link);
+          border-radius: 7px;
+          padding: 6px 12px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 150ms, color 150ms, border-color 150ms;
+        }
+        .escalation-prompt-btn:hover {
+          background: var(--widget-brand);
+          color: var(--widget-brand-text);
+          border-color: var(--widget-brand);
+        }
+        .contact-trigger-row {
+          display: flex;
+          align-items: center;
+          padding: 8px 14px;
+          border-top: 1px solid var(--widget-bubble-border);
+          background: var(--widget-bubble-bg);
+          flex-shrink: 0;
+        }
+        .contact-trigger-btn {
+          background: none;
+          border: none;
+          padding: 0;
+          color: var(--widget-brand-link);
+          font: 600 13px var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .contact-trigger-btn:hover {
+          text-decoration: underline;
+        }
+        .contact-trigger-btn:focus-visible {
+          outline: 3px solid #92d0b2;
+          outline-offset: 2px;
+          border-radius: 4px;
+        }
+        .unified-contact-form {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          padding: 12px 14px;
+          border-top: 1px solid var(--widget-bubble-border);
+          background: var(--widget-bubble-bg);
+          color: var(--widget-input-text);
+          flex-shrink: 0;
+          font-size: 13px;
+          max-height: 58vh;
+          overflow-y: auto;
+        }
+        .unified-contact-form strong {
+          font-size: 14px;
+          font-weight: 700;
+          color: var(--widget-assistant-heading);
+        }
+        .unified-contact-form p {
+          margin: 0;
+          font-size: 12px;
+          color: var(--widget-assistant-muted);
+          line-height: 1.35;
+        }
+        .unified-contact-form label {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          font-weight: 600;
+          font-size: 12px;
+          color: var(--widget-assistant-text);
+        }
+        .unified-contact-form input,
+        .unified-contact-form textarea {
+          width: 100%;
+          min-width: 0;
+          padding: 7px 10px;
+          border: 1px solid var(--widget-input-border);
+          border-radius: 8px;
+          color: var(--widget-input-text);
+          background: var(--widget-input-bg);
+          font: inherit;
+          font-size: 13px;
+        }
+        .unified-contact-form textarea {
+          min-height: 54px;
+          resize: vertical;
+        }
+        .unified-contact-form input:focus,
+        .unified-contact-form textarea:focus {
+          outline: 2px solid var(--widget-brand);
+          outline-offset: -1px;
+        }
+        .unified-contact-actions {
+          display: flex;
+          gap: 8px;
+          margin-top: 2px;
+        }
+        .unified-contact-actions button {
+          min-height: 38px;
+          padding: 0 14px;
+          border: 0;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 13px;
+          cursor: pointer;
+          transition: opacity 150ms;
+        }
+        .unified-contact-actions button[type="submit"] {
+          background: var(--widget-brand);
+          color: var(--widget-brand-text);
+        }
+        .unified-contact-actions button[type="button"] {
+          background: var(--widget-source-bg);
+          color: var(--widget-source-text);
+        }
+        .unified-contact-actions button:disabled {
+          opacity: 0.55;
+          cursor: wait;
+        }
         .lead-form { max-height: 42vh; overflow-y: auto; }
         .lead-form label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
         .lead-form input, .lead-form textarea { font-weight: 400; }
@@ -931,6 +1241,31 @@ export default function WidgetFrame() {
           </button>
           <button
             type="button"
+            className="header-btn theme-btn"
+            title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            onClick={toggleTheme}
+          >
+            {theme === "dark" ? (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+              </svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+            )}
+          </button>
+          <button
+            type="button"
             className="close-btn"
             aria-label="Close chat"
             onClick={() => postToParent({ type: "supportai:close" })}
@@ -940,11 +1275,24 @@ export default function WidgetFrame() {
         </div>
       </header>
       <div className="messages" ref={messagesRef} aria-live="polite">
-        {messages.map((item, index) => (
+        {restoreState === "loading" ? (
+          <div className="restore-status" role="status" aria-live="polite">
+            <span className="typing-dot" aria-hidden="true" /><span className="typing-dot" aria-hidden="true" /><span className="typing-dot" aria-hidden="true" />
+            <span>Restoring your conversation…</span>
+          </div>
+        ) : restoreState === "failed" ? null : messages.map((item, index) => (
           <div key={`${item.role}-${index}`}>
             {item.role !== "user" && (
               <div className={`sender-label ${item.role === "human" ? "human-sender" : "ai-sender"}`}>
-                <span className="sender-avatar" aria-hidden="true">{item.role === "human" ? "👤" : item.role === "system" ? "ℹ️" : "🤖"}</span>
+                <span className="sender-avatar" aria-hidden="true">
+                  {item.role === "human" ? (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                  ) : item.role === "system" ? (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                  ) : (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-9.5A7.5 7.5 0 0 1 10.5 4h2A7.5 7.5 0 0 1 20 11.5Z" /><path d="M8 12h8M8 15h5" /></svg>
+                  )}
+                </span>
                 {item.role === "human" ? "Human Support" : item.role === "system" ? "SupportAI update" : "AI Assistant"}
               </div>
             )}
@@ -965,6 +1313,27 @@ export default function WidgetFrame() {
                 ))}
               </div>
             )}
+            {item.role === "assistant" && item.requestId && escalatedTurnId === item.requestId && !showContactForm && (
+              <div className="escalation-prompt" role="region" aria-label="Support team recommendation">
+                <span className="escalation-prompt-text">
+                  Would you like our human team to follow up on this?
+                </span>
+                <button
+                  type="button"
+                  className="escalation-prompt-btn"
+                  onClick={() => {
+                    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+                    if (lastUser && !contactMessage) {
+                      setContactMessage(lastUser.content.slice(0, 2000));
+                    }
+                    setContactNotice("");
+                    setShowContactForm(true);
+                  }}
+                >
+                  Talk to our team →
+                </button>
+              </div>
+            )}
           </div>
         ))}
         {loading && !streamingStarted && (
@@ -974,6 +1343,16 @@ export default function WidgetFrame() {
         )}
       </div>
       {error && <div className="error" role="alert">{error}</div>}
+      {restoreState === "failed" && (
+        <div className="restore-error" role="alert">
+          <span>We couldn’t load your previous conversation.</span>
+          <div className="restore-actions">
+            <button type="button" onClick={requestRestore}>Try again</button>
+            <button type="button" onClick={resetLocalSession}>Start a new conversation</button>
+          </div>
+        </div>
+      )}
+      {restoreNotice && restoreState === "ready" && <div className="status-banner" role="status">{restoreNotice}</div>}
       {visibleHandoffNotice && <div className="status-banner" role="status">{visibleHandoffNotice}</div>}
       {leadNotice && <div className="status-banner" role={leadNotice.startsWith("Thanks!") ? "status" : "alert"}>{leadNotice}</div>}
       {handoffAccess && !handoffPollUnavailable && (
@@ -986,51 +1365,97 @@ export default function WidgetFrame() {
           type="button"
           id="supportai-reset-session"
           className="handoff-btn"
-          style={{ color: "#69736f", fontSize: "12px" }}
+          style={{ color: "var(--widget-source-label)", fontSize: "12px" }}
           onClick={resetLocalSession}
         >
           Start new conversation
         </button>
       )}
-      {!handoffAccess && !showHandoffForm && !showLeadForm && (
-        <button type="button" className="handoff-btn" onClick={() => setShowHandoffForm(true)}>
-          Talk to a human
-        </button>
+      {!handoffAccess && !showContactForm && (
+        <div className="contact-trigger-row">
+          <button
+            type="button"
+            className="contact-trigger-btn"
+            onClick={() => {
+              const lastUser = [...messages].reverse().find((item) => item.role === "user");
+              if (lastUser && !contactMessage) {
+                setContactMessage(lastUser.content.slice(0, 2000));
+              }
+              setContactNotice("");
+              setShowContactForm(true);
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            Talk to our team
+          </button>
+        </div>
       )}
-      {!handoffAccess && !showLeadForm && !showHandoffForm && (
-        <button type="button" className="handoff-btn" onClick={() => {
-          setLeadQuestion(([...messages].reverse().find((item) => item.role === "user")?.content ?? "").slice(0, 5000));
-          setLeadNotice("");
-          setShowLeadForm(true);
-        }}>
-          Leave your details
-        </button>
-      )}
-      {showLeadForm && !handoffAccess && (
-        <form className="handoff-form lead-form" onSubmit={submitLead}>
-          <strong>Request a follow-up</strong>
-          <label>Name<input value={leadName} onChange={(event) => setLeadName(event.target.value)} maxLength={120} autoComplete="name" required /></label>
-          <label>Email<input value={leadEmail} onChange={(event) => setLeadEmail(event.target.value)} maxLength={254} type="email" autoComplete="email" required /></label>
-          <label>Your question<textarea value={leadQuestion} onChange={(event) => setLeadQuestion(event.target.value)} maxLength={5000} required /></label>
-          <div className="handoff-actions">
-            <button type="submit" disabled={leadLoading}>{leadLoading ? "Submitting…" : "Submit details"}</button>
-            <button type="button" disabled={leadLoading} onClick={() => setShowLeadForm(false)}>Cancel</button>
+      {showContactForm && !handoffAccess && (
+        <form className="unified-contact-form" onSubmit={submitContactSupport}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <strong>Talk to our team</strong>
+            <button
+              type="button"
+              onClick={() => setShowContactForm(false)}
+              style={{ background: "none", border: "none", color: "var(--widget-assistant-muted)", cursor: "pointer", fontSize: "16px", padding: "2px 6px" }}
+              aria-label="Back to chat"
+            >
+              ✕
+            </button>
+          </div>
+          <p>{handoffIntro || "Leave a note and your email. Our team will review your question and get back to you."}</p>
+          <label>
+            Your name
+            <input
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              maxLength={120}
+              placeholder="Jane Doe (optional)"
+              autoComplete="name"
+            />
+          </label>
+          <label>
+            Your email <span style={{ color: "var(--widget-error-text)" }}>*</span>
+            <input
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+              maxLength={254}
+              type="email"
+              placeholder="jane@example.com"
+              autoComplete="email"
+              required
+            />
+          </label>
+          <label>
+            Message <span style={{ color: "var(--widget-error-text)" }}>*</span>
+            <textarea
+              value={contactMessage}
+              onChange={(e) => setContactMessage(e.target.value)}
+              maxLength={2000}
+              rows={3}
+              placeholder="How can our team help?"
+              required
+            />
+          </label>
+          {contactNotice && (
+            <div className="status-banner" style={{ margin: "2px 0", borderRadius: "6px" }} role="alert">
+              {contactNotice}
+            </div>
+          )}
+          <div className="unified-contact-actions">
+            <button type="submit" disabled={contactSubmitting}>
+              {contactSubmitting ? "Sending…" : "Send message"}
+            </button>
+            <button type="button" disabled={contactSubmitting} onClick={() => setShowContactForm(false)}>
+              Back to chat
+            </button>
           </div>
         </form>
       )}
-      {showHandoffForm && !handoffAccess && (
-        <form className="handoff-form" onSubmit={submitHandoff}>
-          <strong>Talk to a human</strong>
-          <input value={handoffName} onChange={(event) => setHandoffName(event.target.value)} maxLength={120} placeholder="Your name (optional)" />
-          <input value={handoffEmail} onChange={(event) => setHandoffEmail(event.target.value)} maxLength={254} type="email" placeholder="Your email (optional)" />
-          <textarea value={handoffReason} onChange={(event) => setHandoffReason(event.target.value)} maxLength={2000} rows={3} aria-label="Reason for contacting a human" />
-          <div className="handoff-actions">
-            <button type="submit" disabled={handoffLoading}>{handoffLoading ? "Submitting…" : "Submit request"}</button>
-            <button type="button" onClick={() => setShowHandoffForm(false)}>Cancel</button>
-          </div>
-        </form>
-      )}
-      <form onSubmit={submit}>
+      {!showContactForm && (
+        <form onSubmit={submit}>
         <input
           ref={inputRef}
           value={message}
@@ -1039,15 +1464,16 @@ export default function WidgetFrame() {
           autoComplete="off"
           maxLength={WIDGET_MAX_MESSAGE_LENGTH}
           placeholder="Type your question…"
-          disabled={loading || Boolean(handoffAccess)}
+          disabled={loading || Boolean(handoffAccess) || restoreState !== "ready"}
         />
         <button type="submit" disabled={!canSubmitWidgetMessage(message, {
           loading,
           handoffActive: Boolean(handoffAccess),
           assistantReady: Boolean(assistantId),
-          submissionPending: false,
+          submissionPending: restoreState !== "ready",
         })}>Send</button>
       </form>
+      )}
     </main>
   );
 }

@@ -62,8 +62,8 @@ function DraftReview({ item, onChanged }: { item: Item; onChanged: () => void })
         <button type="button" onClick={() => void save("approve")} disabled={busy || answer.trim().length < 10} className="rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{busy ? "Processing…" : draft.status === "approved" ? "Retry approval or processing" : "Approve and process"}</button>
       </div> : null}
     </> : <p className="mt-3 text-xs text-[var(--text-secondary)]">FAQ drafts are available for feedback that reports an issue.</p>}
-    {notice && <p role="status" className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{notice}</p>}
-    {error && <p role="alert" className="mt-2 text-xs text-red-600">{error}</p>}
+    {notice && <p role="status" className="mt-2 text-xs text-[var(--success)] dark:text-[var(--success)]">{notice}</p>}
+    {error && <p role="alert" className="mt-2 text-xs text-[var(--error)]">{error}</p>}
   </div>;
 }
 
@@ -88,7 +88,7 @@ export default function FeedbackReviewPanel() {
     </button>
     {open && <div className="absolute right-0 top-full z-20 mt-2 max-h-[70dvh] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-[var(--text-primary)] shadow-xl sm:p-4">
       {loading && <p role="status" className="text-xs text-[var(--text-secondary)]">Loading feedback…</p>}
-      {error && <p role="alert" className="text-xs text-red-600">{error} <button type="button" onClick={() => void refresh()} className="underline">Retry</button></p>}
+      {error && <p role="alert" className="text-xs text-[var(--error)]">{error} <button type="button" onClick={() => void refresh()} className="underline">Retry</button></p>}
       {!loading && !error && items.length === 0 && <p className="text-xs text-[var(--text-secondary)]">Feedback you submit on test answers will appear here. No evaluations or success scores are inferred.</p>}
       <div className="space-y-3">{items.map((item) => <article key={item.id} className="rounded-lg border border-[var(--border)] p-3">
         <p className="text-xs font-semibold uppercase text-[var(--text-secondary)]">{item.feedback_type.replaceAll("_", " ")}{item.category ? ` · ${item.category.replaceAll("_", " ")}` : ""}</p>

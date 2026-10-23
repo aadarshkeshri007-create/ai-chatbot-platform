@@ -1,4 +1,5 @@
 import { INSTALLATION_VERIFY_PATH, isVerificationConfigReady } from "@/lib/widget-installation";
+import { loadVisitorSessionToken, saveVisitorSessionToken } from "@/lib/widget-session-storage";
 
 const widgetScript = `(() => {
   const isVerificationConfigReady = (${isVerificationConfigReady.toString()});
@@ -16,21 +17,17 @@ const widgetScript = `(() => {
   const appOrigin = new URL(script.src, window.location.href).origin;
   const verificationToken = script.dataset.verificationToken;
   const sessionStorageKey = "supportai:visitor-session:" + assistantId;
+  const loadVisitorSessionToken = (${loadVisitorSessionToken.toString()});
+  const saveVisitorSessionToken = (${saveVisitorSessionToken.toString()});
   function createVisitorSessionToken() {
     const bytes = new Uint8Array(32);
     window.crypto.getRandomValues(bytes);
     return btoa(String.fromCharCode(...bytes)).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
   }
-  let visitorSessionToken = "";
-  try {
-    visitorSessionToken = window.sessionStorage.getItem(sessionStorageKey) || "";
-    if (!/^[A-Za-z0-9_-]{40,100}$/.test(visitorSessionToken)) {
-      visitorSessionToken = createVisitorSessionToken();
-      window.sessionStorage.setItem(sessionStorageKey, visitorSessionToken);
-    }
-  } catch { /* Privacy-restricted storage falls back to an in-memory visitor session. */
-    visitorSessionToken = createVisitorSessionToken();
-  }
+  // localStorage on the client website's origin keeps the conversation resumable after the
+  // browser is closed; sessionStorage is read only to migrate tokens from older widget builds.
+  const visitorStorages = [() => window.localStorage, () => window.sessionStorage];
+  let visitorSessionToken = loadVisitorSessionToken(visitorStorages, sessionStorageKey, createVisitorSessionToken);
   const maxMessageLength = 8000;
   const requestTimeoutMs = 30000;
   const maxRetryAfterSeconds = 300;
@@ -66,32 +63,70 @@ const widgetScript = `(() => {
         width: 58px; height: 58px; border: 0; border-radius: 50%;
         background: var(--brand-color, #236b5b); color: var(--brand-text-color, #fff); cursor: pointer;
         box-shadow: 0 10px 28px rgba(15, 23, 42, .22);
-        font: 25px/58px system-ui, sans-serif;
-        text-align: center;
+        display: flex; align-items: center; justify-content: center;
+        transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease;
+        -webkit-tap-highlight-color: transparent;
       }
-      .launcher:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+      .launcher:hover {
+        transform: scale(1.05);
+        box-shadow: 0 14px 34px rgba(15, 23, 42, .28);
+      }
+      .launcher:active { transform: scale(0.96); }
+      .launcher:focus-visible { outline: 3px solid #92d0b2; outline-offset: 3px; }
+      .launcher .icon-chat, .launcher .icon-close {
+        width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 2;
+        stroke-linecap: round; stroke-linejoin: round;
+        transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), opacity 150ms ease;
+      }
+      .launcher[aria-expanded="false"] .icon-close { display: none; }
+      .launcher[aria-expanded="true"] .icon-chat { display: none; }
       .frame {
         position: fixed; right: 22px; bottom: 92px; z-index: 2147483647;
-        width: min(380px, calc(100vw - 28px)); height: min(600px, calc(100vh - 120px));
+        width: min(400px, calc(100vw - 28px)); height: min(620px, calc(100vh - 120px));
         border: 0; border-radius: 18px; background: white;
-        box-shadow: 0 20px 60px rgba(15, 23, 42, .2);
-        transition: opacity 120ms, transform 120ms;
+        box-shadow: 0 20px 60px -10px rgba(15, 23, 42, .24), 0 0 0 1px rgba(15, 23, 42, .06);
+        transform-origin: bottom right;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: scale(0.92) translateY(12px);
+        transition: opacity 240ms cubic-bezier(0.16, 1, 0.3, 1),
+                    transform 240ms cubic-bezier(0.16, 1, 0.3, 1),
+                    visibility 240ms;
       }
-      [hidden] { display: none !important; }
+      .frame.is-open {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: scale(1) translateY(0);
+      }
       @media (max-width: 480px) {
-        /* On mobile the panel covers the full screen */
-        .launcher { right: 16px; bottom: 16px; }
+        .launcher { right: 16px; bottom: 16px; width: 52px; height: 52px; }
         .frame {
           inset: 0;
           width: 100%;
           height: 100%;
           border-radius: 0;
           bottom: 0;
+          transform-origin: bottom center;
+          transform: translateY(24px);
+        }
+        .frame.is-open {
+          transform: translateY(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .launcher, .frame {
+          transition: none !important;
+          transform: none !important;
         }
       }
     </style>
-    <button class="launcher" type="button" aria-label="Open support chat" aria-expanded="false">\u{1F4AC}</button>
-    <iframe class="frame" title="Support chat" hidden allow="clipboard-write"></iframe>
+    <button class="launcher" type="button" aria-label="Open support chat" aria-expanded="false" aria-haspopup="dialog">
+      <svg class="icon-chat" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+      <svg class="icon-close" viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <iframe class="frame" title="Support chat" allow="clipboard-write" aria-modal="true" role="dialog"></iframe>
   \`;
 
   const launcher = root.querySelector(".launcher");
@@ -104,12 +139,23 @@ const widgetScript = `(() => {
     linkColor: "#236b5b",
   };
   let frameReady = false;
+  let handoffConfig = {
+    enabled: true,
+    intro: "You can send a request to the support team. A reply may not be immediate.",
+  };
   const sendBrandToFrame = () => {
     frame.contentWindow?.postMessage({
       type: "supportai:brand-config",
       brand_color: brand.color,
       brand_text_color: brand.textColor,
       brand_link_color: brand.linkColor,
+    }, appOrigin);
+  };
+  const sendHandoffConfigToFrame = () => {
+    frame.contentWindow?.postMessage({
+      type: "supportai:handoff-config",
+      handoff_enabled: handoffConfig.enabled,
+      handoff_intro: handoffConfig.intro,
     }, appOrigin);
   };
 
@@ -127,9 +173,13 @@ const widgetScript = `(() => {
       textColor: config.brand_text_color.toLowerCase(),
       linkColor: config.brand_link_color.toLowerCase(),
     };
+    handoffConfig = {
+      enabled: config.handoff_enabled !== false,
+      intro: typeof config.handoff_intro === "string" ? config.handoff_intro.slice(0, 500) : handoffConfig.intro,
+    };
     mount.style.setProperty("--brand-color", brand.color);
     mount.style.setProperty("--brand-text-color", brand.textColor);
-    if (frameReady) sendBrandToFrame();
+    if (frameReady) { sendBrandToFrame(); sendHandoffConfigToFrame(); }
     if (typeof verificationToken === "string" && /^[A-Za-z0-9_-]{40,100}$/.test(verificationToken)) {
       void fetch(appOrigin + "${INSTALLATION_VERIFY_PATH}", {
         method: "POST",
@@ -149,21 +199,33 @@ const widgetScript = `(() => {
     "&parent_origin=" + encodeURIComponent(window.location.origin);
 
   function openWidget() {
-    frame.hidden = false;
+    frame.classList.add("is-open");
     launcher.setAttribute("aria-expanded", "true");
     launcher.setAttribute("aria-label", "Close support chat");
+    frame.contentWindow?.postMessage({ type: "supportai:widget-opened" }, appOrigin);
     frame.focus();
   }
 
   function closeWidget() {
-    frame.hidden = true;
+    frame.classList.remove("is-open");
     launcher.setAttribute("aria-expanded", "false");
     launcher.setAttribute("aria-label", "Open support chat");
+    frame.contentWindow?.postMessage({ type: "supportai:widget-closed" }, appOrigin);
     launcher.focus();
   }
 
   launcher.addEventListener("click", () => {
-    if (frame.hidden) { openWidget(); } else { closeWidget(); }
+    if (launcher.getAttribute("aria-expanded") === "true") {
+      closeWidget();
+    } else {
+      openWidget();
+    }
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && launcher.getAttribute("aria-expanded") === "true") {
+      closeWidget();
+    }
   });
 
   async function handleChatRequest(event) {
@@ -376,13 +438,14 @@ const widgetScript = `(() => {
     if (event.source !== frame.contentWindow || event.origin !== appOrigin) return;
     if (event.data && event.data.type === "supportai:rotate-visitor-session") {
       visitorSessionToken = createVisitorSessionToken();
-      try { window.sessionStorage.setItem(sessionStorageKey, visitorSessionToken); } catch { /* Keep reset session in memory. */ }
+  saveVisitorSessionToken(visitorStorages, sessionStorageKey, visitorSessionToken);
       frame.contentWindow?.postMessage({ type: "supportai:reset-session" }, appOrigin);
       return;
     }
     if (event.data && event.data.type === "supportai:ready") {
       frameReady = true;
       sendBrandToFrame();
+      sendHandoffConfigToFrame();
       return;
     }
     if (event.data && event.data.type === "supportai:close") {

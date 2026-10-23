@@ -45,6 +45,7 @@ const EMPTY_COUNTS: InboxCounts = { open: 0, in_progress: 0, waiting_for_custome
 export default function HandoffsPage() {
   const [handoffs, setHandoffs] = useState<Handoff[]>([]);
   const [selected, setSelected] = useState<Handoff | null>(null);
+  const selectedConversationId = selected?.id;
   const [messages, setMessages] = useState<HandoffMessage[]>([]);
   const [reply, setReply] = useState("");
   const [loading, setLoading] = useState(true);
@@ -61,6 +62,7 @@ export default function HandoffsPage() {
   const latestLoad = useRef<(showLoading?: boolean, signal?: AbortSignal) => Promise<void>>(async () => {});
   const detailRequestPending = useRef(false);
   const selectedIdRef = useRef<string | null>(null);
+  const detailPanelRef = useRef<HTMLElement | null>(null);
 
   const load = useCallback(async (showLoading = false, signal?: AbortSignal) => {
     if (listRequestPending.current) {
@@ -190,6 +192,12 @@ export default function HandoffsPage() {
     };
   }, [selected?.id]);
 
+  useEffect(() => {
+    if (selectedConversationId && window.matchMedia("(max-width: 1023px)").matches) {
+      detailPanelRef.current?.scrollIntoView({ block: "start" });
+    }
+  }, [selectedConversationId]);
+
   const updateStatus = async (status: string) => {
     if (!selected || saving || !isValidHandoffStatus(status)) return;
     setSaving(true);
@@ -270,56 +278,58 @@ export default function HandoffsPage() {
         title="Support inbox"
         description="Respond to customers who asked to talk with a human and keep every handoff in context."
       />
-        <div className="mb-5 flex flex-wrap items-center gap-2" aria-label="Support inbox views">
+        <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="Support inbox views">
           {(["active", "resolved", "archived"] as const).map((item) => (
             <button key={item} type="button" onClick={() => { setPage(0); setView(item); }} aria-pressed={view === item}
-              className={`rounded-lg border px-3 py-2 text-sm font-medium ${view === item ? "border-teal-600 bg-teal-600 text-white" : "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"}`}>
+              className={`min-h-10 rounded-[var(--radius-control)] border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] ${view === item ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"}`}>
               {item === "active" ? `Active (${counts.open + counts.in_progress + counts.waiting_for_customer})` : item === "resolved" ? `Resolved (${counts.resolved})` : `Archived (${archivedCount})`}
             </button>
           ))}
           <span className="ml-auto text-xs text-[var(--text-secondary)]">Updates automatically every 7 seconds</span>
         </div>
-        {error && <p role="alert" className="mb-5 rounded-lg border border-[color-mix(in_srgb,var(--error)_30%,transparent)] bg-[color-mix(in_srgb,var(--error)_10%,transparent)] p-3 text-sm text-[var(--error)]">{error}</p>}
-        {loading ? <p className="text-sm text-slate-500">Loading support requests…</p> : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
-            <section className="space-y-3">
+        {error && <p role="alert" className="mb-5 rounded-lg border border-[color-mix(in_srgb,var(--error)_30%,transparent)] bg-[var(--error-soft)] p-3 text-sm text-[var(--error)]">{error}</p>}
+        {loading ? <p className="text-sm text-[var(--text-secondary)]">Loading support requests…</p> : (
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
+            <section aria-label="Support requests" className={`${selected ? "hidden lg:block" : ""} min-w-0 space-y-2`}>
               {handoffs.length === 0 && error && <button type="button" onClick={() => void load(true)} className="surface w-full rounded-xl border-dashed p-8 text-left text-sm text-[var(--text-secondary)]">Could not load the inbox. Retry.</button>}
               {handoffs.length === 0 && !error && <p className="surface rounded-xl border-dashed p-8 text-sm text-[var(--text-secondary)]">{view === "active" ? "No active support requests." : view === "resolved" ? "No resolved support requests." : "No archived support requests."}</p>}
               {handoffs.map((handoff) => (
                 <button key={handoff.id} type="button" onClick={() => void select(handoff)}
-                  className={`surface w-full rounded-xl p-4 text-left transition-colors hover:border-[var(--accent)] ${selected?.id === handoff.id ? "border-[var(--accent)] bg-[var(--accent-soft)]" : ""}`}>
+                  aria-pressed={selected?.id === handoff.id}
+                  className={`surface w-full rounded-lg p-3 text-left transition-colors hover:border-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] ${selected?.id === handoff.id ? "border-[var(--accent)] bg-[var(--accent-soft)]" : ""}`}>
                   <div className="flex items-center justify-between gap-3">
-                    <strong className="truncate text-sm text-slate-900 dark:text-slate-100">{handoff.customer_name || "Website visitor"}</strong>
-                    <span className="flex items-center gap-2 text-xs text-slate-500">
-                      {handoff.latest_human_message_at && handoff.latest_human_message_at > (seenAt[handoff.id] ?? "") && <span className="rounded-full bg-teal-100 px-2 py-0.5 font-semibold text-teal-800">New reply</span>}
+                    <strong className="truncate text-sm text-[var(--text-primary)]">{handoff.customer_name || "Website visitor"}</strong>
+                    <span className="flex shrink-0 items-center gap-2 text-xs text-[var(--text-secondary)]">
+                      {handoff.latest_human_message_at && handoff.latest_human_message_at > (seenAt[handoff.id] ?? "") && <span className="rounded-full bg-[var(--success-soft)] px-2 py-0.5 font-semibold text-[var(--success)]">New reply</span>}
                       {handoff.archived_at ? "Archived" : STATUS_LABELS[handoff.status] || handoff.status}
                     </span>
                   </div>
-                  <p className="mt-2 line-clamp-2 text-sm text-slate-600 dark:text-slate-300">{handoff.reason}</p>
-                  <time className="mt-2 block text-xs text-slate-400">{new Date(handoff.created_at).toLocaleString()}</time>
+                  <p className="mt-1 line-clamp-1 text-sm text-[var(--text-secondary)]">{handoff.reason}</p>
+                  <time className="mt-1 block text-xs text-[var(--text-secondary)]">{new Date(handoff.created_at).toLocaleString()}</time>
                 </button>
               ))}
           {(page > 0 || hasMore) && <div className="flex justify-between pt-2">
-            <button type="button" disabled={page === 0 || loading} onClick={() => setPage((current) => Math.max(0, current - 1))} className="rounded-md border border-[var(--border)] px-3 py-2 text-sm disabled:opacity-50">Previous</button>
+            <button type="button" disabled={page === 0 || loading} onClick={() => setPage((current) => Math.max(0, current - 1))} className="min-h-9 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:opacity-50">Previous</button>
             <span className="self-center text-xs text-[var(--text-secondary)]">Page {page + 1}</span>
-            <button type="button" disabled={!hasMore || loading} onClick={() => setPage((current) => current + 1)} className="rounded-md border border-[var(--border)] px-3 py-2 text-sm disabled:opacity-50">Next</button>
+            <button type="button" disabled={!hasMore || loading} onClick={() => setPage((current) => current + 1)} className="min-h-9 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:opacity-50">Next</button>
           </div>}
             </section>
-            <section className="surface rounded-xl p-5">
+            <section ref={detailPanelRef} aria-label="Support conversation detail" className={`${selected ? "" : "hidden lg:block"} surface min-w-0 scroll-mt-3 rounded-xl p-4 sm:p-5`}>
               {!selected ? <p className="text-sm text-[var(--text-secondary)]">Select a request to view its context.</p> : (
                 <>
-                  <div className="border-b border-slate-200 pb-4 dark:border-slate-800">
-                    <h2 className="font-semibold text-slate-900 dark:text-slate-100">{selected.customer_name || "Website visitor"}</h2>
-                    {selected.customer_email && <a className="text-sm text-teal-700 underline" href={`mailto:${selected.customer_email}`}>{selected.customer_email}</a>}
-                    <p className="mt-3 text-sm text-slate-600 dark:text-slate-300"><strong>Reason:</strong> {selected.reason}</p>
+                  <button type="button" onClick={() => { setSelected(null); selectedIdRef.current = null; }} className="mb-3 min-h-10 rounded-lg px-2 text-sm font-medium text-[var(--accent)] hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] lg:hidden">← Back to inbox</button>
+                  <div className="border-b border-[var(--border)] pb-4">
+                    <h2 className="font-semibold text-[var(--text-primary)]">{selected.customer_name || "Website visitor"}</h2>
+                    {selected.customer_email && <a className="text-sm text-[var(--accent)] underline" href={`mailto:${selected.customer_email}`}>{selected.customer_email}</a>}
+                    <p className="mt-3 text-sm text-[var(--text-secondary)]"><strong>Reason:</strong> {selected.reason}</p>
                     <select value={selected.status} disabled={saving || selected.status === "resolved"} onChange={(event) => void updateStatus(event.target.value)}
-                      className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+                      className="mt-3 min-h-10 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--focus)] focus:ring-2 focus:ring-[var(--focus)]/20">
                       {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                     {selected.status === "resolved" && <p className="mt-2 text-xs text-[var(--text-secondary)]">Resolved requests are final and cannot be reopened.</p>}
-                    {selected.status === "resolved" && !selected.archived_at && <button type="button" disabled={saving} onClick={() => void setArchived(selected, true)} className="mt-3 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] disabled:opacity-50">{saving ? "Saving…" : "Archive"}</button>}
-                    {selected.archived_at && <button type="button" disabled={saving} onClick={() => void setArchived(selected, false)} className="mt-3 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] disabled:opacity-50">{saving ? "Saving…" : "Restore to resolved"}</button>}
-                    {selected.status === "resolved" && <Link href={`/history?type=handoff&id=${encodeURIComponent(selected.id)}${selected.archived_at ? "&archived=all" : ""}`} className="ml-3 inline-flex rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--accent)]">View in Chat History</Link>}
+                    {selected.status === "resolved" && !selected.archived_at && <button type="button" disabled={saving} onClick={() => void setArchived(selected, true)} className="mt-3 min-h-10 rounded-[var(--radius-control)] border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Saving…" : "Archive"}</button>}
+                    {selected.archived_at && <button type="button" disabled={saving} onClick={() => void setArchived(selected, false)} className="mt-3 min-h-10 rounded-[var(--radius-control)] border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Saving…" : "Restore to resolved"}</button>}
+                    {selected.status === "resolved" && <Link href={`/history?type=handoff&id=${encodeURIComponent(selected.id)}${selected.archived_at ? "&archived=all" : ""}`} className="ml-3 inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--accent-link)] transition hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]">View in Chat History</Link>}
                   </div>
                   <div className="max-h-[420px] space-y-3 overflow-y-auto py-4">
                     {messages.map((message) => (
@@ -330,8 +340,8 @@ export default function HandoffsPage() {
                     ))}
                   </div>
                   <div className="flex gap-2">
-                    <textarea value={reply} onChange={(event) => setReply(event.target.value)} maxLength={8000} rows={3} placeholder="Write a reply…" className="min-w-0 flex-1 rounded-lg border border-slate-300 p-3 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
-                    <button type="button" onClick={() => void sendReply()} disabled={saving || !reply.trim()} className="self-end rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Reply</button>
+                    <textarea value={reply} onChange={(event) => setReply(event.target.value)} maxLength={8000} rows={3} placeholder="Write a reply…" className="min-w-0 flex-1 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] outline-none transition focus:border-[var(--focus)] focus:ring-2 focus:ring-[var(--focus)]/20" />
+                    <button type="button" onClick={() => void sendReply()} disabled={saving || !reply.trim()} className="min-h-10 self-end rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:opacity-50">Reply</button>
                   </div>
                 </>
               )}

@@ -1,18 +1,29 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SupportAI Widget Demo</title>
-</head>
-<body>
-  <h1>Acme Technologies</h1>
-  <p>Welcome to our website. Click the chat widget button for support.</p>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SupportAI Widget Demo</title>
+  </head>
+  <body>
+    <h1>Acme Technologies</h1>
+    <p>Welcome to our website. Click the chat widget button for support.</p>
+    <p>To verify an installation, replace this script with the temporary snippet copied from the SupportAI Install page. Verification tokens are short-lived and single-use.</p>
+    <p>
+      <button
+        id="reset-demo"
+        type="button"
+        style="padding: 8px 14px; font: 500 13px system-ui, sans-serif; cursor: pointer; border-radius: 6px; border: 1px solid #cbd4cc; background: #fff;"
+        onclick="window.postMessage({ type: 'supportai:reset-session' }, '*')"
+      >
+        Reset demo conversation
+      </button>
+    </p>
 
-  <script
-    src="https://ai-chatbot-platform-umber.vercel.app/widget.js"
-    data-assistant-id="73df06ca-95c0-41e1-b160-d569f3864291"
-    defer
-  ></script>
-</body>
+    <script
+  src="http://localhost:3000/widget.js"
+  data-assistant-id="73df06ca-95c0-41e1-b160-d569f3864291"
+  defer
+></script>
+  </body>
 </html>

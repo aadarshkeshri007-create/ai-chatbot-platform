@@ -39,8 +39,8 @@ export default function EmptyState({
 
         {loading ? (
           <div className="mt-1 flex w-full max-w-xs animate-pulse flex-col items-center gap-2" aria-label="Loading assistant details">
-            <div className="h-5 w-32 rounded bg-slate-200 dark:bg-slate-800" />
-            <div className="h-4 w-full rounded bg-slate-200 dark:bg-slate-800" />
+            <div className="h-5 w-32 rounded bg-[var(--surface-muted)]" />
+            <div className="h-4 w-full rounded bg-[var(--surface-muted)]" />
           </div>
         ) : (
           <>
@@ -62,7 +62,7 @@ export default function EmptyState({
                 key={`${index}-${suggestion}`}
                 type="button"
                 onClick={() => onSuggestionClick(suggestion)}
-                className="min-h-[44px] rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-left text-sm text-[var(--text-secondary)] shadow-sm transition-all duration-150 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]"
+                className="min-h-[44px] rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-left text-sm text-[var(--text-secondary)] shadow-2xs transition-all duration-150 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)] active:scale-[0.99] active:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2"
               >
                 {suggestion}
               </button>

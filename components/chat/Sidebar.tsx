@@ -181,7 +181,7 @@ export default function Sidebar({
                 role={isOpen ? "dialog" : undefined}
                 aria-modal={isOpen ? "true" : undefined}
                 aria-label="Navigation"
-                className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[var(--border)] bg-[var(--surface)] transition-all duration-300 ease-in-out lg:relative lg:z-auto lg:translate-x-0 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] ${
+                className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[var(--nav-border)] bg-[var(--nav-background)] transition-all duration-300 ease-in-out lg:relative lg:z-auto lg:translate-x-0 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] ${
                     isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
                 } ${
                     collapsed ? "w-72 max-w-[calc(100vw-3rem)] lg:max-w-none lg:w-16" : "w-72 max-w-[calc(100vw-3rem)] lg:max-w-none"
@@ -198,12 +198,15 @@ export default function Sidebar({
                         aria-label="SupportAI Home"
                     >
                         <div
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] transition-colors group-hover/brand:brightness-95 shadow-sm"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.7rem] bg-[var(--nav-active)] text-[var(--nav-accent)] transition-colors group-hover/brand:brightness-110"
                             aria-hidden="true"
                         >
-                            <span className="text-xs font-bold text-white">AI</span>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-9.5A7.5 7.5 0 0 1 10.5 4h2A7.5 7.5 0 0 1 20 11.5Z" />
+                                <path d="M8 12h8M8 15h5" />
+                            </svg>
                         </div>
-                        <span className={`text-sm font-semibold text-[var(--text-primary)] transition-opacity duration-200 ${collapsed ? "lg:hidden" : "block"}`}>
+                        <span className={`text-sm font-semibold text-[var(--nav-text-primary)] transition-opacity duration-200 ${collapsed ? "lg:hidden" : "block"}`}>
                             SupportAI
                         </span>
                     </Link>
@@ -212,7 +215,7 @@ export default function Sidebar({
                     <button
                         type="button"
                         onClick={onToggleCollapsed}
-                        className={`hidden lg:flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${
+                        className={`hidden lg:flex h-7 w-7 items-center justify-center rounded-lg text-[var(--nav-text-muted)] transition-colors hover:bg-[var(--nav-hover)] hover:text-[var(--nav-text-secondary)] dark:text-[var(--nav-text-muted)] dark:hover:bg-[var(--nav-hover)] dark:hover:text-[var(--nav-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] ${
                             collapsed ? "lg:hidden" : ""
                         }`}
                         aria-label="Collapse sidebar"
@@ -229,7 +232,7 @@ export default function Sidebar({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex h-10 w-10 min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                        className="flex h-10 w-10 min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-[var(--nav-text-muted)] transition-colors hover:bg-[var(--nav-hover)] hover:text-[var(--nav-text-secondary)] dark:text-[var(--nav-text-muted)] dark:hover:bg-[var(--nav-hover)] dark:hover:text-[var(--nav-text-primary)] lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
                         aria-label="Close sidebar"
                     >
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -245,7 +248,7 @@ export default function Sidebar({
                         <button
                             type="button"
                             onClick={onToggleCollapsed}
-                            className="group/expand relative flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                            className="group/expand relative flex h-8 w-8 items-center justify-center rounded-lg text-[var(--nav-text-muted)] transition-colors hover:bg-[var(--nav-hover)] hover:text-[var(--nav-text-primary)] dark:text-[var(--nav-text-muted)] dark:hover:bg-[var(--nav-hover)] dark:hover:text-[var(--nav-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
                             aria-label="Expand sidebar"
                             title="Expand sidebar"
                         >
@@ -254,7 +257,7 @@ export default function Sidebar({
                                 <line x1="9" y1="3" x2="9" y2="21" />
                                 <polyline points="14 9 17 12 14 15" />
                             </svg>
-                            <span className="pointer-events-none absolute left-full ml-2 z-50 hidden rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white shadow-md group-hover/expand:block dark:bg-slate-800 dark:border dark:border-slate-700 whitespace-nowrap" role="tooltip">
+                            <span className="pointer-events-none absolute left-full ml-2 z-50 hidden rounded-md bg-[#0b1410] px-2 py-1 text-xs font-medium text-white shadow-md group-hover/expand:block whitespace-nowrap" role="tooltip">
                                 Expand sidebar
                             </span>
                         </button>
@@ -268,7 +271,7 @@ export default function Sidebar({
                         onClick={handleNewChat}
                         title={collapsed ? "New chat" : undefined}
                         aria-label="New chat"
-                        className={`group/newchat relative flex w-full items-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-sm font-semibold text-[var(--text-primary)] shadow-sm transition-all duration-150 hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] focus-visible:outline-none active:scale-[0.98] ${
+                        className={`group/newchat relative flex w-full items-center rounded-lg border border-[var(--nav-border)] bg-[var(--nav-background)] text-sm font-semibold text-[var(--nav-text-primary)] shadow-sm transition-all duration-150 hover:border-[var(--nav-accent)] hover:bg-[var(--accent-soft)] focus-visible:outline-none active:scale-[0.98] ${
                             collapsed
                                 ? "justify-center px-0 py-2.5 lg:justify-center"
                                 : "gap-2 px-3 py-2.5"
@@ -282,7 +285,7 @@ export default function Sidebar({
                             New chat
                         </span>
                         {collapsed && (
-                            <span className="pointer-events-none absolute left-full ml-2 z-50 hidden rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white shadow-md group-hover/newchat:block dark:bg-slate-800 dark:border dark:border-slate-700 whitespace-nowrap" role="tooltip">
+                            <span className="pointer-events-none absolute left-full ml-2 z-50 hidden rounded-md bg-[#0b1410] px-2 py-1 text-xs font-medium text-white shadow-md group-hover/newchat:block whitespace-nowrap" role="tooltip">
                                 New chat
                             </span>
                         )}
@@ -290,7 +293,8 @@ export default function Sidebar({
                 </div>
 
                 {/* â”€â”€ Main Navigation Links â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-                <nav className={`pt-2 pb-1 ${collapsed ? "px-3 lg:px-2" : "px-3"}`} aria-label="Main navigation">
+                <nav className={`pt-3 pb-1 ${collapsed ? "px-3 lg:px-2" : "px-3"}`} aria-label="Main navigation">
+                    {!collapsed && <p className="mb-2 px-3 text-[10px] font-semibold tracking-[0.1em] text-[var(--nav-text-muted)]">Workspace</p>}
                     <div className="flex flex-col gap-0.5">
                         {MAIN_NAV_ITEMS.map((item) => {
                             const isActive = pathname === item.href;
@@ -302,21 +306,21 @@ export default function Sidebar({
                                     onClick={onClose}
                                     title={collapsed ? item.label : undefined}
                                     aria-label={collapsed ? item.label : undefined}
-                                    className={`group/navitem relative flex items-center rounded-lg text-[13px] font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${
+                                    className={`group/navitem relative flex items-center rounded-lg text-[13px] font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 ${
                                         collapsed
                                             ? "justify-center px-0 py-2.5"
                                             : "gap-2.5 px-3 py-2"
                                     } ${
                                         isActive
-                                            ? "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-400 shadow-sm"
-                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100"
+                                            ? "bg-[var(--nav-active)] text-[var(--nav-text-primary)] dark:bg-[var(--nav-active)] dark:text-[var(--nav-accent)] shadow-sm"
+                                            : "text-[var(--nav-text-secondary)] hover:bg-[var(--nav-hover)] hover:text-[var(--nav-text-primary)] dark:text-[var(--nav-text-muted)] dark:hover:bg-[var(--nav-hover)] dark:hover:text-[var(--nav-text-primary)]"
                                     }`}
                                     aria-current={isActive ? "page" : undefined}
                                 >
                                     {/* Active border bar */}
                                     {isActive && (
                                         <span
-                                            className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-teal-500"
+                                            className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-[var(--nav-accent)]"
                                             aria-hidden="true"
                                         />
                                     )}
@@ -324,8 +328,8 @@ export default function Sidebar({
                                     <span
                                         className={`shrink-0 ${
                                             isActive
-                                                ? "text-teal-600 dark:text-teal-400"
-                                                : "text-slate-400 group-hover/navitem:text-slate-600 dark:text-slate-400 dark:group-hover/navitem:text-slate-200"
+                                                ? "text-[var(--nav-accent)] dark:text-[var(--nav-accent)]"
+                                                : "text-[var(--nav-text-muted)] group-hover/navitem:text-[var(--nav-text-secondary)] dark:text-[var(--nav-text-muted)] dark:group-hover/navitem:text-[var(--nav-text-primary)]"
                                         }`}
                                     >
                                         {item.icon}
@@ -337,7 +341,7 @@ export default function Sidebar({
 
                                     {/* Tooltip on collapsed desktop hover */}
                                     {collapsed && (
-                                        <span className="pointer-events-none absolute left-full ml-2 z-50 hidden rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white shadow-md group-hover/navitem:block dark:bg-slate-800 dark:border dark:border-slate-700 whitespace-nowrap" role="tooltip">
+                                        <span className="pointer-events-none absolute left-full ml-2 z-50 hidden rounded-md bg-[#0b1410] px-2 py-1 text-xs font-medium text-white shadow-md group-hover/navitem:block whitespace-nowrap" role="tooltip">
                                             {item.label}
                                         </span>
                                     )}
@@ -348,7 +352,7 @@ export default function Sidebar({
                 </nav>
 
                 {/* â”€â”€ Divider â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-                <div className={`my-1 border-t border-slate-100 dark:border-slate-800 ${collapsed ? "mx-3 lg:mx-2" : "mx-4"}`} />
+                <div className={`my-1 border-t border-[var(--nav-border)] dark:border-[var(--nav-border)] ${collapsed ? "mx-3 lg:mx-2" : "mx-4"}`} />
 
                 {/* â”€â”€ Conversations list (only on /chat, hidden when collapsed on desktop) â”€â”€ */}
                 {isOnChatPage && (
@@ -360,17 +364,17 @@ export default function Sidebar({
                     >
                         {conversations.length === 0 ? (
                             <div className="flex flex-col items-center py-8 text-center">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300 dark:text-slate-600 mb-2" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--nav-text-secondary)] dark:text-[var(--nav-text-secondary)] mb-2" aria-hidden="true">
                                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                                 </svg>
-                                <p className="text-xs text-slate-400 dark:text-slate-500">
+                                <p className="text-xs text-[var(--nav-text-muted)] dark:text-[var(--nav-text-muted)]">
                                     No conversations yet
                                 </p>
                             </div>
                         ) : (
                             <div className="flex flex-col gap-0.5">
-                                <span className="mb-1.5 px-2 text-[11px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                                    Recent
+                                <span className="mb-1.5 px-2 text-[11px] font-medium text-[var(--nav-text-muted)]">
+                                    Recent conversations
                                 </span>
                                 {conversations.map((conversation) => {
                                     const isActive = activeConversationId === conversation.id;
@@ -379,8 +383,8 @@ export default function Sidebar({
                                             key={conversation.id}
                                             className={`group flex items-center gap-1 rounded-lg transition-colors duration-100 ${
                                                 isActive
-                                                    ? "bg-teal-50 border-l-2 border-l-teal-500 dark:bg-teal-950/40 dark:border-l-teal-400"
-                                                    : "hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                                                    ? "bg-[var(--nav-active)] border-l-2 border-l-[var(--nav-accent)] dark:bg-[var(--nav-active)] dark:border-l-[var(--nav-accent)]"
+                                                    : "hover:bg-[var(--nav-hover)] dark:hover:bg-[var(--nav-hover)]"
                                             }`}
                                         >
                                             <button
@@ -390,8 +394,8 @@ export default function Sidebar({
                                                 }
                                                 className={`min-w-0 flex-1 truncate px-3 py-2 text-left text-[13px] transition-colors ${
                                                     isActive
-                                                        ? "font-medium text-teal-800 dark:text-teal-300"
-                                                        : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
+                                                        ? "font-medium text-[var(--nav-text-primary)] dark:text-[var(--nav-accent)]"
+                                                        : "text-[var(--nav-text-secondary)] hover:text-[var(--nav-text-primary)] dark:text-[var(--nav-text-secondary)] dark:hover:text-[var(--nav-text-primary)]"
                                                 }`}
                                                 title={conversation.title}
                                             >
@@ -404,7 +408,7 @@ export default function Sidebar({
                                                     handleDelete(event, conversation.id)
                                                 }
                                                 aria-label={`Delete ${conversation.title}`}
-                                                className="mr-1.5 flex h-7 w-7 min-h-[44px] min-w-[44px] sm:h-6 sm:w-6 sm:min-h-0 sm:min-w-0 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-100 sm:opacity-0 transition-all duration-100 hover:bg-red-50 hover:text-red-500 dark:text-slate-500 dark:hover:bg-red-950/40 dark:hover:text-red-400 group-hover:opacity-100 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                                                className="mr-1.5 flex h-7 w-7 min-h-[44px] min-w-[44px] sm:h-6 sm:w-6 sm:min-h-0 sm:min-w-0 shrink-0 items-center justify-center rounded-md text-[var(--nav-text-muted)] opacity-100 sm:opacity-0 transition-all duration-100 hover:bg-[var(--error-soft)] hover:text-[var(--error)] dark:text-[var(--nav-text-muted)] dark:hover:bg-[var(--error-soft)] dark:hover:text-[var(--error)] group-hover:opacity-100 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--error)]"
                                             >
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                                     <line x1="18" y1="6" x2="6" y2="18" />
@@ -423,7 +427,8 @@ export default function Sidebar({
                 {(!isOnChatPage || collapsed) && <div className="flex-1" />}
 
                 {/* â”€â”€ Bottom Section: Settings and Profile â”€â”€ */}
-                <div className={`border-t border-slate-100 dark:border-slate-800 pt-2 pb-3 ${collapsed ? "px-3 lg:px-2" : "px-3"}`}>
+                <div className={`border-t border-[var(--nav-border)] pt-2 pb-3 ${collapsed ? "px-3 lg:px-2" : "px-3"}`}>
+                    {!collapsed && <p className="mb-1 px-3 pt-1 text-[10px] font-semibold tracking-[0.1em] text-[var(--nav-text-muted)]">Manage</p>}
                     <div className="flex flex-col gap-0.5">
                         {/* Settings & Profile */}
                         {BOTTOM_NAV_ITEMS.map((item) => {
@@ -436,20 +441,20 @@ export default function Sidebar({
                                     onClick={onClose}
                                     title={collapsed ? item.label : undefined}
                                     aria-label={collapsed ? item.label : undefined}
-                                    className={`group/botitem relative flex items-center rounded-lg text-[13px] font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${
+                                    className={`group/botitem relative flex items-center rounded-lg text-[13px] font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 ${
                                         collapsed
                                             ? "justify-center px-0 py-2.5"
                                             : "gap-2.5 px-3 py-2"
                                     } ${
                                         isActive
-                                            ? "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-400 shadow-sm"
-                                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100"
+                                            ? "bg-[var(--nav-active)] text-[var(--nav-text-primary)] dark:bg-[var(--nav-active)] dark:text-[var(--nav-accent)] shadow-sm"
+                                            : "text-[var(--nav-text-secondary)] hover:bg-[var(--nav-hover)] hover:text-[var(--nav-text-primary)] dark:text-[var(--nav-text-muted)] dark:hover:bg-[var(--nav-hover)] dark:hover:text-[var(--nav-text-primary)]"
                                     }`}
                                     aria-current={isActive ? "page" : undefined}
                                 >
                                     {isActive && (
                                         <span
-                                            className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-teal-500"
+                                            className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-[var(--nav-accent)]"
                                             aria-hidden="true"
                                         />
                                     )}
@@ -457,8 +462,8 @@ export default function Sidebar({
                                     <span
                                         className={`shrink-0 ${
                                             isActive
-                                                ? "text-teal-600 dark:text-teal-400"
-                                                : "text-slate-400 group-hover/botitem:text-slate-600 dark:text-slate-400 dark:group-hover/botitem:text-slate-200"
+                                                ? "text-[var(--nav-accent)] dark:text-[var(--nav-accent)]"
+                                                : "text-[var(--nav-text-muted)] group-hover/botitem:text-[var(--nav-text-secondary)] dark:text-[var(--nav-text-muted)] dark:group-hover/botitem:text-[var(--nav-text-primary)]"
                                         }`}
                                     >
                                         {item.icon}
@@ -469,7 +474,7 @@ export default function Sidebar({
                                     </span>
 
                                     {collapsed && (
-                                        <span className="pointer-events-none absolute left-full ml-2 z-50 hidden rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white shadow-md group-hover/botitem:block dark:bg-slate-800 dark:border dark:border-slate-700 whitespace-nowrap" role="tooltip">
+                                        <span className="pointer-events-none absolute left-full ml-2 z-50 hidden rounded-md bg-[#0b1410] px-2 py-1 text-xs font-medium text-white shadow-md group-hover/botitem:block whitespace-nowrap" role="tooltip">
                                             {item.label}
                                         </span>
                                     )}

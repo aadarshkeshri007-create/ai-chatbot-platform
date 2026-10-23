@@ -88,38 +88,38 @@ export default function OnboardingChecklist() {
   };
   if (!expanded) {
     return (
-      <button type="button" onClick={() => setExpanded(true)} className="mx-4 mt-3 flex min-h-10 items-center gap-2 self-start rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 sm:mx-6">
+      <button type="button" onClick={() => setExpanded(true)} className="mx-4 mt-3 flex min-h-10 items-center gap-2 self-start rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--background)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] dark:border-[var(--border)] dark:bg-[var(--surface)] dark:text-[var(--text-primary)] sm:mx-6">
         {progress === 100 ? "Setup checklist complete" : `Setup checklist · ${progress}% complete`}
       </button>
     );
   }
 
   return (
-    <section aria-labelledby="onboarding-heading" className="mx-4 mt-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:mx-6">
+    <section aria-labelledby="onboarding-heading" className="mx-4 mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm dark:border-[var(--border)] dark:bg-[var(--surface)] sm:mx-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 id="onboarding-heading" className="text-sm font-semibold text-slate-900 dark:text-slate-100">Get your assistant ready</h2>
-          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{progress}% complete · based on processed knowledge, saved assistant replies, and a verified widget load.</p>
+          <h2 id="onboarding-heading" className="text-sm font-semibold text-[var(--text-primary)] dark:text-[var(--text-primary)]">Get your assistant ready</h2>
+          <p className="mt-1 text-xs text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">{progress}% complete · based on processed knowledge, saved assistant replies, and a verified widget load.</p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <button type="button" aria-label="Hide setup checklist" onClick={() => setExpanded(false)} className="rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:text-slate-300 dark:hover:bg-slate-800">Hide</button>
+          <button type="button" aria-label="Hide setup checklist" onClick={() => setExpanded(false)} className="rounded-[var(--radius-control)] px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] dark:text-[var(--text-secondary)] dark:hover:bg-[var(--surface-muted)]">Hide</button>
           {progress === 100 && accountId && (
-            <button type="button" aria-label="Dismiss completed setup checklist" title="Dismiss completed setup checklist" onClick={dismissCompletedChecklist} className="flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:text-slate-300 dark:hover:bg-slate-800">
+            <button type="button" aria-label="Dismiss completed setup checklist" title="Dismiss completed setup checklist" onClick={dismissCompletedChecklist} className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-control)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] dark:text-[var(--text-secondary)] dark:hover:bg-[var(--surface-muted)]">
               <span aria-hidden="true">×</span>
             </button>
           )}
         </div>
       </div>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-label="Setup progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
-        <div className="h-full rounded-full bg-teal-700 transition-[width] dark:bg-teal-400" style={{ width: `${progress}%` }} />
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)] dark:bg-[var(--surface-muted)]" role="progressbar" aria-label="Setup progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+        <div className="h-full rounded-full bg-[var(--accent)] transition-[width] dark:bg-[var(--accent)]" style={{ width: `${progress}%` }} />
       </div>
       <ol className="mt-3 grid gap-2 sm:grid-cols-3">
         {steps.map((step) => (
           <li key={step.id}>
-            <Link href={step.href} className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:border-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:border-slate-700 dark:text-slate-200">
-              <span aria-hidden="true" className={step.complete ? "text-emerald-700 dark:text-emerald-400" : "text-slate-600 dark:text-slate-300"}>{step.complete ? "✓" : "○"}</span>
+            <Link href={step.href} className="flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] border border-[var(--border)] px-3 py-2 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] dark:border-[var(--border)] dark:text-[var(--text-primary)]">
+              <span aria-hidden="true" className={step.complete ? "text-[var(--success)] dark:text-[var(--success)]" : "text-[var(--text-secondary)] dark:text-[var(--text-secondary)]"}>{step.complete ? "✓" : "○"}</span>
               <span>{step.label}</span>
-              {step.complete && <span className="ml-auto text-emerald-700 dark:text-emerald-400">Done</span>}
+              {step.complete && <span className="ml-auto text-[var(--success)] dark:text-[var(--success)]">Done</span>}
             </Link>
           </li>
         ))}

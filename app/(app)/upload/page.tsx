@@ -380,54 +380,28 @@ export default function UploadPage() {
 
   return (
     <PageFrame>
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         <PageHeader
           eyebrow="Training source"
-          title="Knowledge Base"
-          description="Upload the documents your assistant should use when answering customer questions."
+          title="Knowledge base"
+          description="Manage the documents SupportAI can use to ground customer answers."
         />
 
-        <section className="mb-10 border-b border-[var(--border)] pb-8">
+        <section className="mb-8 border-b border-[var(--border)] pb-7">
           <div
-            className={`group relative flex items-center gap-4 overflow-hidden rounded-xl border border-dashed px-4 py-4 text-left transition-all duration-300 sm:px-5 ${uploading
-                ? "border-teal-400 bg-teal-50/50 dark:border-teal-500/60 dark:bg-teal-950/20"
-                : "border-slate-200 bg-slate-50/50 hover:border-teal-300 hover:bg-teal-50/30 dark:border-slate-700/70 dark:bg-slate-900/40 dark:hover:border-teal-700 dark:hover:bg-teal-950/10"
-              }`}
+            className={`workspace-surface flex flex-col items-start gap-4 p-5 text-left sm:flex-row sm:items-center sm:p-6 ${uploading ? "border-[var(--focus)] bg-[var(--accent-soft)]" : ""}`}
           >
-            {/* Ambient glow */}
-            <div
-              className={`pointer-events-none absolute -top-24 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-teal-400/10 blur-3xl transition-opacity duration-500 ${uploading ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                }`}
-            />
-
-            {/* Animated background grid */}
-            <div className="pointer-events-none absolute inset-0 opacity-[0.035] dark:opacity-[0.04]">
-              <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:24px_24px]" />
-            </div>
 
             {/* Upload icon */}
             <div
-              className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-all duration-500 ${uploading
-                  ? "border-teal-200 bg-white shadow-lg shadow-teal-500/20 dark:border-teal-800 dark:bg-slate-900"
-                  : "border-slate-200 bg-white shadow-sm group-hover:-translate-y-1 group-hover:border-teal-200 group-hover:shadow-lg group-hover:shadow-teal-500/10 dark:border-slate-700 dark:bg-slate-900"
-                }`}
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--accent-soft)] text-[var(--accent-link)]"
             >
-              {/* Outer pulse */}
-              {uploading && (
-                <span className="absolute inset-0 animate-ping rounded-2xl border border-teal-400/30" />
-              )}
-
               {/* Document */}
-              <div
-                className={`relative transition-all duration-500 ${uploading
-                    ? "animate-[float_2s_ease-in-out_infinite]"
-                    : "group-hover:-translate-y-0.5"
-                  }`}
-              >
+              <div className="relative">
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
-                  className="h-8 w-8 text-teal-600 dark:text-teal-400"
+                  className="h-8 w-8 text-[var(--accent-link)] dark:text-[var(--accent-link)]"
                 >
                   <path
                     d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"
@@ -454,12 +428,7 @@ export default function UploadPage() {
                 </svg>
 
                 {/* Upload arrow */}
-                <div
-                  className={`absolute -right-3 -top-3 flex h-6 w-6 items-center justify-center rounded-full bg-teal-600 text-white shadow-md shadow-teal-500/30 transition-transform duration-500 dark:bg-teal-500 ${uploading
-                      ? "animate-bounce"
-                      : "group-hover:-translate-y-1"
-                    }`}
-                >
+                <div className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-white">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -477,14 +446,14 @@ export default function UploadPage() {
               </div>
             </div>
 
-            <div className="relative min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <div className="min-w-0 flex-1">
+            <h2 className="text-base font-semibold tracking-tight text-[var(--text-primary)]">
               {uploading
                 ? "Uploading your documents..."
                 : "Build your knowledge base"}
             </h2>
 
-            <p className="mt-1 max-w-xl text-xs leading-5 text-slate-500 dark:text-slate-400">
+            <p className="mt-1 max-w-xl text-sm leading-5 text-[var(--text-secondary)]">
               {uploading
                 ? "Securely uploading your files to your AI knowledge base."
                 : "Upload PDF documents up to 20 MB each. Your AI assistant will be able to answer questions based on the content of these documents."}
@@ -497,11 +466,11 @@ export default function UploadPage() {
                 fileInputRef.current?.click()
               }
               disabled={uploading}
-              className="relative inline-flex min-h-[40px] shrink-0 items-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+              className="mt-3 inline-flex min-h-11 shrink-0 items-center gap-2 rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
             >
               {uploading ? (
                 <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white dark:border-slate-950/30 dark:border-t-slate-950" />
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                   Uploading...
                 </>
               ) : (
@@ -539,55 +508,56 @@ export default function UploadPage() {
             {uploading && (
               <div className="relative mt-7 w-full max-w-sm">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-teal-600 dark:text-teal-400">
+                  <span className="text-[11px] font-medium text-[var(--accent-link)] dark:text-[var(--accent-link)]">
                     Uploading securely
                   </span>
 
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-[var(--text-secondary)]">
                     Please wait...
                   </span>
                 </div>
 
-                <div className="relative h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                  <div className="absolute inset-y-0 left-0 w-1/2 animate-[uploading_1.4s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-transparent via-teal-500 to-transparent" />
+                <div className="relative h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)] dark:bg-[var(--surface-muted)]">
+                  <div className="absolute inset-y-0 left-0 w-1/2 animate-[uploading_1.4s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent" />
                 </div>
               </div>
             )}
 
-            <p className="relative mt-4 text-[11px] text-slate-400 dark:text-slate-500">
+            <p className="mt-3 text-xs text-[var(--text-secondary)]">
               Maximum file size: 20 MB per file
             </p>
           </div>
           {error && (
-            <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+            <p role="alert" className="mt-4 rounded-lg border border-[color-mix(in_srgb,var(--error)_25%,var(--border))] bg-[var(--error-soft)] px-4 py-3 text-sm text-[var(--error)] dark:border-[color-mix(in_srgb,var(--error)_35%,var(--border))] dark:bg-[var(--error-soft)] dark:text-[var(--error)]">
               {error}
             </p>
           )}
 
           {success && (
-            <p role="status" aria-live="polite" className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
+            <p role="status" aria-live="polite" className="mt-4 rounded-lg border border-[color-mix(in_srgb,var(--success)_30%,var(--border))] bg-[var(--success-soft)] px-4 py-3 text-sm text-[var(--success)] dark:border-[color-mix(in_srgb,var(--success)_30%,var(--border))] dark:bg-[var(--success-soft)] dark:text-[var(--success)]">
               {success}
             </p>
           )}
 
           {processResult && (
-            <p role="status" aria-live="polite" className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300">
+            <p role="status" aria-live="polite" className="mt-4 rounded-lg border border-[color-mix(in_srgb,var(--accent)_30%,var(--border))] bg-[var(--accent-soft)] px-4 py-3 text-sm text-[var(--accent-link)] dark:border-[color-mix(in_srgb,var(--accent)_30%,var(--border))] dark:bg-[var(--accent-soft)] dark:text-[var(--accent-link)]">
               {processResult}
             </p>
           )}
         </section>
 
-        <section className="mb-10 mt-6">
-          <h2 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">
-            Documents
-          </h2>
+        <section className="mb-8 mt-7">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold tracking-tight text-[var(--text-primary)]">Documents</h2>
+            <span className="text-xs text-[var(--text-secondary)]">{documents.length} {documents.length === 1 ? "file" : "files"}</span>
+          </div>
 
           {documentsLoadState === "loading" ? (
-            <p role="status" aria-live="polite" className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+            <p role="status" aria-live="polite" className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-10 text-center text-sm text-[var(--text-secondary)] dark:border-[var(--border)] dark:bg-[var(--surface)] dark:text-[var(--text-secondary)]">
               Loading your documents...
             </p>
           ) : documentsLoadState === "error" ? (
-            <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-5 py-5 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+            <div role="alert" className="rounded-xl border border-[color-mix(in_srgb,var(--error)_25%,var(--border))] bg-[var(--error-soft)] px-5 py-5 text-sm text-[var(--error)] dark:border-[color-mix(in_srgb,var(--error)_35%,var(--border))] dark:bg-[var(--error-soft)] dark:text-[var(--error)]">
               <p>{documentsLoadError}</p>
               <button
                 type="button"
@@ -595,40 +565,55 @@ export default function UploadPage() {
                   setDocumentsLoadState("loading");
                   void loadDocuments();
                 }}
-                className="mt-3 min-h-[44px] rounded-lg border border-red-300 px-4 py-2 font-medium transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-red-800 dark:hover:bg-red-950"
+                className="mt-3 min-h-11 rounded-[var(--radius-control)] border border-[color-mix(in_srgb,var(--error)_35%,var(--border))] px-4 py-2 font-medium transition hover:bg-[var(--error-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--error)] focus-visible:ring-offset-2"
               >
                 Retry loading documents
               </button>
             </div>
           ) : documents.length === 0 ? (
-            <div className="rounded-xl border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-6 py-10 text-center text-sm text-[var(--text-secondary)] dark:border-[var(--border)] dark:bg-[var(--surface)] dark:text-[var(--text-secondary)]">
               No documents uploaded yet.
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+            <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] dark:border-[var(--border)] dark:bg-[var(--surface)]">
               {documents.map(
                 (document) => (
                   <div
                     key={document.id}
-                    className="border-b border-slate-100 px-4 py-3.5 sm:px-5 sm:py-4 last:border-b-0 dark:border-slate-800"
+                    className="border-b border-[var(--border)] px-4 py-3.5 sm:px-5 sm:py-4 last:border-b-0 dark:border-[var(--border)]"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                       <div className="flex min-w-0 flex-1 items-start gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm dark:bg-slate-800">
-                          📄
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-[var(--surface-muted)] text-[var(--accent-link)]" aria-hidden="true">
+                          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+                            <path
+                              d="M5 3.5A1.5 1.5 0 0 1 6.5 2h5.086a1.5 1.5 0 0 1 1.06.44l2.914 2.914a1.5 1.5 0 0 1 .44 1.06V16.5A1.5 1.5 0 0 1 14.5 18h-8A1.5 1.5 0 0 1 5 16.5v-13Z"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <path
+                              d="M12.5 2v3.5a1 1 0 0 0 1 1h3.5M8 10.5h4M8 13.5h4"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                          <p className="truncate text-sm font-medium text-[var(--text-primary)] dark:text-[var(--text-primary)]">
                             {document.file_name}
                           </p>
 
-                          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                          <p className="mt-0.5 text-xs text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">
                             {formatFileSize(document.file_size)} · {document.file_type || "Unknown file type"}
                           </p>
 
                           {document.status === "processed" && (
-                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            <p className="mt-1 text-xs text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">
                               {typeof document.chunk_count === "number" ? `${document.chunk_count} chunks` : "Chunk count unavailable"}
                               {document.processed_at && ` · Processed ${new Date(document.processed_at).toLocaleString()}`}
                             </p>
@@ -638,32 +623,30 @@ export default function UploadPage() {
                             "processing" && (
                               <div className="mt-3 w-full max-w-sm">
                                 <div className="mb-1.5 flex items-center justify-between">
-                                  <span className="text-[11px] font-medium text-teal-600 dark:text-teal-400">
+                                  <span className="text-[11px] font-medium text-[var(--accent-link)] dark:text-[var(--accent-link)]">
                                     Indexing document...
                                   </span>
 
-                                  <span className="text-[11px] text-slate-400">
-                                    AI
-                                  </span>
+                                  <span className="text-[11px] text-[var(--text-secondary)]">In progress</span>
                                 </div>
 
-                                <div className="relative h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                                  <div className="absolute inset-y-0 left-0 w-1/2 animate-[loading_1.5s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-transparent via-teal-500 to-transparent" />
+                                <div className="relative h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)] dark:bg-[var(--surface-muted)]">
+                                  <div className="absolute inset-y-0 left-0 w-1/2 animate-[loading_1.5s_ease-in-out_infinite] rounded-full bg-[var(--accent)]" />
                                 </div>
                               </div>
                             )}
 
                           {document.status ===
                             "failed" && (
-                              <p className="mt-2 text-xs text-red-500 dark:text-red-400">
+                              <p className="mt-2 text-xs text-[var(--error)] dark:text-[var(--error)]">
                                 {document.processing_error || "Processing failed. You can retry."}
                               </p>
                             )}
 
                           {document.status === "processed" && document.extraction_preview && (
-                            <details className="mt-2 max-w-2xl rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-700">
-                              <summary className="cursor-pointer font-medium text-slate-600 dark:text-slate-300">View extracted text preview</summary>
-                              <p className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-slate-500 dark:text-slate-400">{document.extraction_preview}</p>
+                            <details className="mt-2 max-w-2xl rounded-lg border border-[var(--border)] px-3 py-2 text-xs dark:border-[var(--border)]">
+                              <summary className="cursor-pointer font-medium text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">View extracted text preview</summary>
+                              <p className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">{document.extraction_preview}</p>
                             </details>
                           )}
                         </div>
@@ -672,30 +655,27 @@ export default function UploadPage() {
                       <div className="flex shrink-0 flex-wrap items-center justify-start sm:justify-end gap-2 sm:gap-3 pt-1 sm:pt-0">
                         {document.status ===
                           "processing" ? (
-                          <div className="flex items-center gap-2 rounded-full bg-teal-50 px-2.5 py-1 dark:bg-teal-950/40">
-                            <span className="relative flex h-2.5 w-2.5">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-400 opacity-75" />
-                              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-teal-500" />
-                            </span>
+                          <div className="flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-2.5 py-1 dark:bg-[var(--accent-soft)]">
+                          <span className="h-2 w-2 rounded-full bg-[var(--accent)]" aria-hidden="true" />
 
-                            <span className="text-xs font-medium text-teal-600 dark:text-teal-400">
+                            <span className="text-xs font-medium text-[var(--accent-link)] dark:text-[var(--accent-link)]">
                               Processing
                             </span>
                           </div>
                         ) : document.status ===
                           "processed" ? (
-                          <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
-                            <span>✓</span>
+                          <span className="flex items-center gap-1.5 rounded-full bg-[var(--success-soft)] px-2.5 py-1 text-xs font-medium text-[var(--success)] dark:bg-[var(--success-soft)] dark:text-[var(--success)]">
+                            <span aria-hidden="true">✓</span>
                             Processed
                           </span>
                         ) : document.status ===
                           "failed" ? (
-                          <span className="flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 dark:bg-red-950/40 dark:text-red-400">
+                          <span className="flex items-center gap-1.5 rounded-full bg-[var(--error-soft)] px-2.5 py-1 text-xs font-medium text-[var(--error)] dark:bg-[var(--error-soft)] dark:text-[var(--error)]">
                             <span>!</span>
                             Failed
                           </span>
                         ) : (
-                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          <span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)] dark:bg-[var(--surface-muted)] dark:text-[var(--text-secondary)]">
                             Uploaded
                           </span>
                         )}
@@ -715,7 +695,7 @@ export default function UploadPage() {
                             document.status ===
                             "processing"
                           }
-                          className="min-h-[44px] sm:min-h-0 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                          className="min-h-10 rounded-[var(--radius-control)] bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
                         >
                           {processingId ===
                             document.id
@@ -742,7 +722,7 @@ export default function UploadPage() {
                             deletingId ===
                             document.id
                           }
-                          className="min-h-[44px] sm:min-h-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                          className="min-h-10 rounded-[var(--radius-control)] border border-[color-mix(in_srgb,var(--error)_25%,var(--border))] px-3 py-1.5 text-xs font-medium text-[var(--error)] transition hover:bg-[var(--error-soft)] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--error)] focus-visible:ring-offset-2"
                         >
                           {deletingId ===
                             document.id

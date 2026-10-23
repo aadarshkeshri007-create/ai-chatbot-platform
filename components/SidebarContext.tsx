@@ -47,7 +47,7 @@ type SidebarContextValue = {
 };
 
 const noop = () => {};
-const noopWithId = (_id: string) => {};
+const noopWithId = (_id: string) => { void _id; };
 
 const COLLAPSED_STORAGE_KEY = "supportai-sidebar-collapsed";
 
@@ -89,6 +89,7 @@ export function SidebarProvider({
         try {
             const stored = localStorage.getItem(COLLAPSED_STORAGE_KEY);
             if (stored === "true") {
+                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setCollapsed(true);
             }
         } catch {

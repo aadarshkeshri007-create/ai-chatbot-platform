@@ -27,6 +27,7 @@ function dateLabel(value: string) {
 export default function HistoryPage() {
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [selected, setSelected] = useState<HistoryItem | null>(null);
+  const selectedConversationId = selected?.id;
   const [detail, setDetail] = useState<Detail | null>(null);
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
@@ -42,6 +43,7 @@ export default function HistoryPage() {
   const [error, setError] = useState("");
   const openedQueryId = useRef("");
   const detailRequestVersion = useRef(0);
+  const detailPanelRef = useRef<HTMLElement | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -137,11 +139,16 @@ export default function HistoryPage() {
     setSearch(""); setFrom(""); setTo(""); setStatus("all"); setKind("all"); setArchived("all"); setPage(0);
   };
 
+  useEffect(() => {
+    if (selectedConversationId && window.matchMedia("(max-width: 1023px)").matches) {
+      detailPanelRef.current?.scrollIntoView({ block: "start" });
+    }
+  }, [selectedConversationId]);
+
   return (
     <PageFrame>
       <PageHeader eyebrow="Conversations" title="Chat history" description="Search persisted assistant chats and human support handoffs." />
-      <p className="mb-5 text-sm text-[var(--text-secondary)]">Review saved dashboard chats, website visitor conversations, and human support handoffs.</p>
-      <section className="surface mb-6 rounded-xl p-4" aria-label="History filters">
+      <section className={`${selected ? "hidden lg:block" : ""} surface mb-6 rounded-xl p-4`} aria-label="History filters">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           <label className="text-xs font-medium text-[var(--text-secondary)] lg:col-span-2">Search messages or customer
             <input value={search} onChange={(event) => { setPage(0); setSearch(event.target.value); }} placeholder="Name, email, or message" className="mt-1 block min-h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--text-primary)]" />
@@ -174,18 +181,17 @@ export default function HistoryPage() {
         </div>
       </section>
 
-      {error && <div role="alert" className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">{error} {items.length === 0 && <button type="button" onClick={() => void load()} className="ml-2 underline">Retry</button>}</div>}
-      <div className="grid gap-5 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
-        <section aria-label="Conversation results" className="space-y-3">
+      {error && <div role="alert" className="mb-4 rounded-lg border border-[color-mix(in_srgb,var(--error)_30%,transparent)] bg-[var(--error-soft)] p-3 text-sm text-[var(--error)]">{error} {items.length === 0 && <button type="button" onClick={() => void load()} className="ml-2 underline">Retry</button>}</div>}
+      <div className="grid gap-4 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
+        <section aria-label="Conversation results" className={`${selected ? "hidden lg:block" : ""} min-w-0 space-y-2`}>
           {loading && items.length === 0 && <p className="surface rounded-xl p-5 text-sm text-[var(--text-secondary)]">Loading history…</p>}
           {!loading && items.length === 0 && !error && <p className="surface rounded-xl border-dashed p-8 text-center text-sm text-[var(--text-secondary)]">No persisted conversations match these filters.</p>}
           {items.map((item) => (
             <button key={`${item.kind}-${item.id}`} type="button" onClick={() => void openDetail(item)} aria-pressed={selected?.id === item.id}
-              className={`surface w-full rounded-xl p-4 text-left hover:border-[var(--accent)] ${selected?.id === item.id ? "border-[var(--accent)] bg-[var(--accent-soft)]" : ""}`}>
-              <div className="flex items-start justify-between gap-2"><strong className="line-clamp-2 text-sm text-[var(--text-primary)]">{item.title}</strong><span className="shrink-0 text-xs text-[var(--text-secondary)]">{item.archived ? "Archived" : STATUS_LABELS[item.status] || item.status}</span></div>
-              <p className="mt-1 text-xs text-[var(--text-secondary)]">{item.customer} · {item.kind === "mixed" ? "AI + human" : item.kind === "handoff" ? "Human handoff" : "AI chat"}</p>
-              <p className="mt-2 line-clamp-2 text-sm text-[var(--text-secondary)]">{item.preview}</p>
-              <p className="mt-2 text-xs text-[var(--text-secondary)]">{dateLabel(item.firstActivityAt)} – {dateLabel(item.lastActivityAt)}</p>
+              className={`surface w-full rounded-lg p-3 text-left transition-colors hover:border-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] ${selected?.id === item.id ? "border-[var(--accent)] bg-[var(--accent-soft)]" : ""}`}>
+              <div className="flex items-center justify-between gap-2"><strong className="truncate text-sm text-[var(--text-primary)]">{item.title}</strong><span className="shrink-0 text-xs text-[var(--text-secondary)]">{item.archived ? "Archived" : STATUS_LABELS[item.status] || item.status}</span></div>
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-[var(--text-secondary)]"><span className="truncate">{item.customer} · {item.kind === "mixed" ? "AI + human" : item.kind === "handoff" ? "Human handoff" : "AI chat"}</span><time>{dateLabel(item.lastActivityAt)}</time></div>
+              <p className="mt-1 line-clamp-1 text-sm text-[var(--text-secondary)]">{item.preview}</p>
             </button>
           ))}
           <div className="flex items-center justify-between py-2">
@@ -195,9 +201,10 @@ export default function HistoryPage() {
           </div>
         </section>
 
-        <section className="surface min-h-96 rounded-xl p-5" aria-label="Conversation detail">
+        <section ref={detailPanelRef} className={`${selected ? "" : "hidden lg:block"} surface min-h-96 min-w-0 scroll-mt-3 rounded-xl p-4 sm:p-5`} aria-label="Conversation detail">
           {!selected && <p className="text-sm text-[var(--text-secondary)]">Select a conversation to review its saved messages.</p>}
           {selected && <>
+            <button type="button" onClick={() => setSelected(null)} className="mb-3 min-h-10 rounded-lg px-2 text-sm font-medium text-[var(--accent)] hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] lg:hidden">← Back to history</button>
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-4">
               <div><h2 className="font-semibold text-[var(--text-primary)]">{selected.title}</h2><p className="mt-1 text-sm text-[var(--text-secondary)]">{selected.customer} · {selected.kind === "mixed" ? "AI + human handoff" : selected.kind === "handoff" ? "Human handoff" : "AI chat"}</p></div>
               <div className="flex gap-2">

@@ -30,7 +30,7 @@ test("public assistant config bypasses login only for its GET and OPTIONS route"
 test("allowed origin and valid assistant return only public branding with exact CORS", async () => {
   const handlers = createPublicAssistantConfigHandlers(async (requestedId) => {
     assert.equal(requestedId, assistantId);
-    return { data: { brand_color: "#12abef", allowed_domains: ["127.0.0.1"] } };
+    return { data: { brand_color: "#12abef", allowed_domains: ["127.0.0.1"], handoff_enabled: false, handoff_intro: "Ask our team for a reply." } };
   });
   const response = await handlers.GET(withAllowedOrigin(new Request(apiUrl, {
     headers: { origin: allowedOrigin },
@@ -43,6 +43,8 @@ test("allowed origin and valid assistant return only public branding with exact 
     brand_color: "#12abef",
     brand_text_color: "#111827",
     brand_link_color: "#334155",
+    handoff_enabled: false,
+    handoff_intro: "Ask our team for a reply.",
   });
 });
 

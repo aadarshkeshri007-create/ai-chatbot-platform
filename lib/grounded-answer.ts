@@ -73,6 +73,7 @@ export async function generateGroundedAnswerStream(
   systemInstruction: string,
   onText: (delta: string) => void,
   abortSignal?: AbortSignal,
+  fallbackMessage = GROUNDED_ANSWER_FALLBACK,
 ): Promise<GroundedAnswer | null> {
   if (sources.length === 0) return null;
   const stream = await ai.models.generateContentStream({
@@ -94,7 +95,7 @@ export async function generateGroundedAnswerStream(
     const validNumbers = rawSourceNumbers && validSourceNumbers(rawSourceNumbers, sources.length);
     const answerIsApproved = Boolean(validNumbers && validNumbers.length > 0);
     const isSafeAbstentionPrefix = rawSourceNumbers?.length === 0 &&
-      Boolean(partial && GROUNDED_ANSWER_FALLBACK.startsWith(partial.value));
+      Boolean(partial && fallbackMessage.startsWith(partial.value));
     if ((answerIsApproved || isSafeAbstentionPrefix) && partial && partial.value.startsWith(emitted)) {
       const delta = partial.value.slice(emitted.length);
       if (delta) onText(delta);
@@ -104,7 +105,7 @@ export async function generateGroundedAnswerStream(
   const parsed = parseJson(raw) as Partial<GroundedAnswer> | null;
   const sourceNumbers = validSourceNumbers(parsed?.sourceNumbers, sources.length);
   const answer = typeof parsed?.answer === "string" ? parsed.answer.trim() : "";
-  if (!answer || !sourceNumbers || (sourceNumbers.length === 0 && answer !== GROUNDED_ANSWER_FALLBACK)) {
+  if (!answer || !sourceNumbers || (sourceNumbers.length === 0 && answer !== fallbackMessage)) {
     return null;
   }
   if (answer !== emitted) {

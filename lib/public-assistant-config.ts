@@ -16,6 +16,8 @@ const assistantIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9
 export type PublicAssistantConfigRecord = {
   brand_color: unknown;
   allowed_domains: string[] | null;
+  handoff_enabled?: unknown;
+  handoff_intro?: unknown;
 };
 
 export type AssistantConfigLookup = (
@@ -52,10 +54,15 @@ export function createPublicAssistantConfigHandlers(lookupAssistant: AssistantCo
         }
 
         const brandColor = normalizeBrandColor(data.brand_color) ?? DEFAULT_BRAND_COLOR;
+        const handoffIntro = typeof data.handoff_intro === "string" && data.handoff_intro.trim()
+          ? data.handoff_intro.trim().slice(0, 500)
+          : "You can send a request to the support team. A reply may not be immediate.";
         return publicChatJson(request, {
           brand_color: brandColor,
           brand_text_color: getBrandTextColor(brandColor),
           brand_link_color: getBrandLinkColor(brandColor),
+          handoff_enabled: data.handoff_enabled !== false,
+          handoff_intro: handoffIntro,
         }, { headers: { "Cache-Control": "no-store" } }, data.allowed_domains);
       } catch {
         return publicChatJson(request, { error: "Assistant configuration is unavailable." }, { status: 503 });

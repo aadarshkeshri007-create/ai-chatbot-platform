@@ -177,28 +177,30 @@ export default function InstallWidgetPage() {
 
   return (
     <PageFrame>
-      <div className="mx-auto w-full max-w-5xl">
-        <PageHeader eyebrow="Go live" title="Install Widget" description="Install the same assistant launcher and chat panel configured in Settings." />
-        {loading ? <p className="text-sm text-slate-600 dark:text-slate-300">Loading assistant details…</p> : (
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,.8fr)]">
-            <div className="space-y-7">
-              <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Your embed snippet</h2>
-                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">This snippet uses your Assistant ID and loads the widget from this SupportAI deployment.</p>
-                {verifiedOrigin && <p className="mt-2 text-xs font-medium text-emerald-800 dark:text-emerald-300">Last verified widget load: {verifiedOrigin}</p>}
-                <pre className="mt-4 overflow-x-auto rounded-lg bg-slate-950 p-4 text-xs leading-6 text-slate-100"><code>{snippet || "Assistant ID unavailable"}</code></pre>
+      <div className="mx-auto w-full max-w-[1440px]">
+        <PageHeader eyebrow="Go live" title="Install widget" description="Add the SupportAI chat to your site and confirm it loads from the right domain." />
+        {loading ? <p className="text-sm text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">Loading assistant details…</p> : (
+          <div className="grid items-start gap-9 xl:grid-cols-[minmax(0,1.25fr)_minmax(350px,.75fr)]">
+            <div className="min-w-0 space-y-8">
+              <section className="border-b border-[var(--border)] pb-7">
+                <p className="workspace-kicker">1 · Add the widget</p>
+                <h2 className="mt-2 text-lg font-semibold tracking-tight text-[var(--text-primary)]">Your embed snippet</h2>
+                <p className="mt-1 text-sm text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">This snippet uses your Assistant ID and loads the widget from this SupportAI deployment.</p>
+                {verifiedOrigin && <p className="mt-2 text-xs font-medium text-emerald-800 dark:text-[var(--success)]">Last verified widget load: {verifiedOrigin}</p>}
+                <pre className="code-surface mt-4 overflow-x-auto rounded-[var(--radius-control)] border border-[var(--nav-border)] p-4 text-xs leading-6"><code>{snippet || "Assistant ID unavailable"}</code></pre>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => void copySnippet()} disabled={!snippet} className="min-h-11 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2 disabled:opacity-50">{copied ? "Copied" : "Copy snippet"}</button>
-                  <Link href="/settings" className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Edit appearance and domains</Link>
+                  <button type="button" onClick={() => void copySnippet()} disabled={!snippet} className="min-h-11 rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 disabled:opacity-50">{copied ? "Copied" : "Copy snippet"}</button>
+                  <Link href="/settings" className="inline-flex min-h-11 items-center rounded-[var(--radius-control)] border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]">Customize the widget</Link>
                 </div>
-                {error && <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">{error}</p>}
-                {message && <p role="status" aria-live="polite" className="mt-3 text-sm text-slate-700 dark:text-slate-200">{message}</p>}
+                {error && <p role="alert" className="mt-3 text-sm text-[var(--error)] dark:text-[var(--error)]">{error}</p>}
+                {message && <p role="status" aria-live="polite" className="mt-3 text-sm text-[var(--text-primary)] dark:text-[var(--text-primary)]">{message}</p>}
               </section>
 
-              <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Verify a live installation</h2>
-                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Enter the exact website origin, create a short-lived challenge, copy the temporary snippet, then publish or reload the website. The widget confirms itself after its script and assistant configuration load from that origin.</p>
-                <label htmlFor="install-origin" className="mt-4 block text-sm font-medium text-slate-800 dark:text-slate-200">Website origin</label>
+              <section className="border-b border-[var(--border)] pb-7">
+                <p className="workspace-kicker">2 · Verify</p>
+                <h2 className="mt-2 text-lg font-semibold tracking-tight text-[var(--text-primary)]">Confirm the installation</h2>
+                <p className="mt-1 text-sm text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">Enter the exact website origin, create a short-lived challenge, copy the temporary snippet, then publish or reload the website. The widget confirms itself after its script and assistant configuration load from that origin.</p>
+                <label htmlFor="install-origin" className="mt-4 block text-sm font-medium text-[var(--text-primary)] dark:text-[var(--text-primary)]">Website origin</label>
                 <input id="install-origin" value={websiteOrigin} onChange={(event) => {
                   const nextOrigin = event.target.value;
                   if (nextOrigin !== websiteOrigin) {
@@ -206,43 +208,44 @@ export default function InstallWidgetPage() {
                     setChallengeToken("");
                   }
                   setWebsiteOrigin(nextOrigin);
-                }} placeholder="https://support.example.com" className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                }} placeholder="https://support.example.com" className="control-surface mt-1.5 min-h-11 w-full rounded-[var(--radius-control)] border px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]" />
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => void startVerification()} disabled={working || !assistantId} className="min-h-11 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2 disabled:opacity-50">{working ? "Working…" : "Create verification check"}</button>
-                  <button type="button" onClick={() => void checkVerification()} disabled={working} className="min-h-11 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Refresh status</button>
+                  <button type="button" onClick={() => void startVerification()} disabled={working || !assistantId} className="min-h-11 rounded-[var(--radius-control)] bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 disabled:opacity-50">{working ? "Working…" : "Create verification check"}</button>
+                  <button type="button" onClick={() => void checkVerification()} disabled={working} className="min-h-11 rounded-[var(--radius-control)] border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]">Refresh status</button>
                 </div>
-                {checksLoading && <p role="status" className="mt-3 text-sm text-slate-600 dark:text-slate-300">Loading installation checks…</p>}
+                {checksLoading && <p role="status" className="mt-3 text-sm text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">Loading installation checks…</p>}
                 {checksError && (
-                  <div role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                  <div role="alert" className="mt-3 rounded-lg border border-[color-mix(in_srgb,var(--error)_25%,var(--border))] bg-[var(--error-soft)] p-3 text-sm text-[var(--error)] dark:border-[color-mix(in_srgb,var(--error)_35%,var(--border))] dark:bg-[var(--error-soft)] dark:text-red-200">
                     <p>{checksError}</p>
-                    <button type="button" onClick={() => void refreshChecks()} disabled={checksLoading} className="mt-2 min-h-10 rounded-md border border-red-300 px-3 py-1.5 font-medium hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 disabled:opacity-60 dark:border-red-800 dark:hover:bg-red-950">Retry</button>
+                    <button type="button" onClick={() => void refreshChecks()} disabled={checksLoading} className="mt-2 min-h-10 rounded-md border border-[color-mix(in_srgb,var(--error)_45%,var(--border))] px-3 py-1.5 font-medium hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-700 disabled:opacity-60 dark:border-red-800 dark:hover:bg-red-950">Retry</button>
                   </div>
                 )}
-                {!checksLoading && !checksError && checks.length === 0 && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">No installation checks yet.</p>}
+                {!checksLoading && !checksError && checks.length === 0 && <p className="mt-3 text-sm text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">No installation checks yet.</p>}
                 {!checksLoading && checks.length > 0 && (
                   <ul className="mt-3 space-y-2" aria-label="Recent installation checks">
                     {checks.map((check) => (
-                      <li key={check.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700">
-                        <span className="break-all text-slate-700 dark:text-slate-200">{check.expected_origin}</span>
-                        <span className="text-xs capitalize text-slate-600 dark:text-slate-300">{check.status} · {new Date(check.created_at).toLocaleString()}</span>
+                      <li key={check.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2 text-sm dark:border-[var(--border)]">
+                        <span className="break-all text-[var(--text-primary)] dark:text-[var(--text-primary)]">{check.expected_origin}</span>
+                        <span className="text-xs capitalize text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">{check.status} · {new Date(check.created_at).toLocaleString()}</span>
                       </li>
                     ))}
                   </ul>
                 )}
-                <p className="mt-3 text-xs leading-5 text-slate-600 dark:text-slate-300">Verification confirms a successful widget configuration load at one point in time. It cannot guarantee the site keeps the snippet installed or that future AI requests will succeed. The one-use token expires after 10 minutes.</p>
+                <p className="mt-3 text-xs leading-5 text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">Verification confirms a successful widget configuration load at one point in time. It cannot guarantee the site keeps the snippet installed or that future AI requests will succeed. The one-use token expires after 10 minutes.</p>
               </section>
 
-              <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Add the snippet to your site</h2>
-                <ol className="mt-3 list-decimal space-y-3 pl-5 text-sm leading-6 text-slate-700 dark:text-slate-200">
+              <section>
+                <p className="workspace-kicker">3 · Publish</p>
+                <h2 className="mt-2 text-lg font-semibold tracking-tight text-[var(--text-primary)]">Add the snippet to your site</h2>
+                <ol className="mt-3 list-decimal space-y-3 pl-5 text-sm leading-6 text-[var(--text-primary)] dark:text-[var(--text-primary)]">
                   <li><strong>HTML:</strong> paste the snippet before the closing <code>&lt;/body&gt;</code> tag on each page where support should appear.</li>
                   <li><strong>WordPress:</strong> use a trusted site-wide custom-code or footer-script facility, or a Custom HTML block on one page. Avoid placing the JavaScript in a rich-text paragraph.</li>
                   <li><strong>Shopify:</strong> add it through the theme’s supported custom code area near the end of the storefront body, then preview and publish the theme.</li>
                   <li><strong>Wix:</strong> add it through the site’s custom-code integration and choose body-end placement and the intended pages, then publish.</li>
                   <li><strong>Webflow:</strong> add it to the site or page footer custom code, publish the site, then inspect the published domain rather than only Designer preview.</li>
                 </ol>
-                <h3 className="mt-5 text-sm font-semibold text-slate-900 dark:text-slate-100">Troubleshooting</h3>
-                <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-700 dark:text-slate-200">
+                <h3 className="mt-5 text-sm font-semibold text-[var(--text-primary)] dark:text-[var(--text-primary)]">Troubleshooting</h3>
+                <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-[var(--text-primary)] dark:text-[var(--text-primary)]">
                   <li>For a 403, add the exact origin (scheme and port included) to the deployment’s <code>PUBLIC_CHAT_ALLOWED_ORIGINS</code>, and add its hostname to Settings → Allowed Domains when that list is restricted.</li>
                   <li>Publish the site after adding the code. Check the browser Network panel for <code>/widget.js</code>, <code>/api/public/assistant-config</code>, and the verification request.</li>
                   <li>Cross-origin browser requests are subject to CORS. A blocked or missing configuration request cannot be treated as verified. Do not use wildcard origins.</li>
@@ -250,12 +253,14 @@ export default function InstallWidgetPage() {
               </section>
             </div>
 
-            <section className="h-fit rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+            <section className="workspace-surface h-fit p-4 xl:sticky xl:top-6">
               <div className="mb-3">
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Live widget preview</h2>
-                <p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">This loads the deployed widget code. The preview uses this app’s origin, so assistant domain restrictions may prevent chat requests unless that origin is allowed.</p>
+                <h2 className="text-base font-semibold text-[var(--text-primary)] dark:text-[var(--text-primary)]">Live widget preview</h2>
+                <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)] dark:text-[var(--text-secondary)]">This loads the deployed widget code. The preview uses this app’s origin, so assistant domain restrictions may prevent chat requests unless that origin is allowed.</p>
               </div>
-              <iframe title="Live SupportAI widget preview" src={previewUrl} className="h-[620px] w-full rounded-lg border border-slate-200 dark:border-slate-700" />
+              <div className="overflow-hidden rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--background)] p-2">
+                <iframe title="Live SupportAI widget preview" src={previewUrl} className="h-[560px] w-full rounded-md border border-[var(--border)] bg-[var(--surface)]" />
+              </div>
             </section>
           </div>
         )}
