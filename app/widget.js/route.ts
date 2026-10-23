@@ -296,12 +296,18 @@ const widgetScript = `(() => {
             : isHandoff
               ? JSON.stringify({
                   assistant_id: assistantId,
+                  request_id: data.requestId,
                   customer_name: data.customerName,
                   customer_email: data.customerEmail,
                   reason: data.reason,
+                  ...(typeof data.latestMessage === "string" && data.latestMessage.trim()
+                    ? { latest_message: data.latestMessage.trim() }
+                    : {}),
                   transcript: data.transcript,
                   session_token: visitorSessionToken,
-                  conversation_id: data.conversationId,
+                  ...(typeof data.conversationId === "string" && data.conversationId.trim()
+                    ? { conversation_id: data.conversationId.trim() }
+                    : {}),
                 })
               : isLead
                 ? JSON.stringify({
@@ -383,7 +389,11 @@ const widgetScript = `(() => {
                   ? payload.message
                   : publicLeadErrorForStatus(response.status),
               }
-          : { error: publicErrorForStatus(response.status) };
+          : {
+              error: typeof payload?.error === "string" && payload.error.length <= 240
+                ? payload.error
+                : publicErrorForStatus(response.status),
+            };
       }
 
       const retryAfterHeader = response.headers.get("Retry-After");

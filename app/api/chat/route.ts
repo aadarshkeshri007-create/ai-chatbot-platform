@@ -15,7 +15,16 @@ import { logSupabaseError } from "@/lib/supabase/error";
 import { getRetrievalState } from "@/lib/testing-playground";
 import { classifyChatFailure, isChatRequestAborted, safeChatFailureDiagnostics } from "@/lib/chat-errors";
 import { resolveRetrievalQuery } from "@/lib/query-rewrite";
-import { languageInstruction, responseToneInstruction, unknownAnswerMessage } from "@/lib/assistant-behavior";
+import {
+  countConsecutiveAbstentions,
+  evaluateEscalationTrigger,
+  explicitHandoffResponseMessage,
+  isExplicitHumanHandoffRequest,
+  isKnownAbstentionMessage,
+  languageInstruction,
+  responseToneInstruction,
+  unknownAnswerMessage,
+} from "@/lib/assistant-behavior";
 
 export const runtime = "nodejs";
 
@@ -98,6 +107,7 @@ export async function POST(request: Request) {
       unknownAnswerBehavior,
       unknownAnswerMessage: configuredUnknownAnswerMessage,
       handoffEnabled,
+      handoffIntro,
     } = getAssistantSettings({ ...profile, ...responsePreferences, ...behaviorPreferences });
     const fallbackMessage = unknownAnswerMessage(unknownAnswerBehavior, configuredUnknownAnswerMessage, handoffEnabled);
 
@@ -233,21 +243,28 @@ export async function POST(request: Request) {
     // The user message was saved immediately before this query. Results are newest
     // first, so remove the latest fetched row by position—not by matching text.
     // This remains correct even if an earlier message has identical content.
-    const priorConversationMessages = (conversationMessages ?? []).slice(1);
-    const historyText = priorConversationMessages
-      .reverse()
+    const chronologicalPriorMessages = (conversationMessages ?? []).slice(1).reverse();
+    const priorConsecutiveAbstentions = countConsecutiveAbstentions(
+      chronologicalPriorMessages,
+      fallbackMessage,
+    );
+    const historyText = chronologicalPriorMessages
       .map((msg) => `${msg.role}: ${msg.content}`)
       .join("\n");
 
-    setStage("query_rewrite_decision");
-    const retrievalQueryResult = await resolveRetrievalQuery(
-      cleanMessage,
-      priorConversationMessages.length > 0,
-      async () => {
-        setStage("gemini_query_rewrite");
-        const rewriteResponse = await ai.models.generateContent({
-          model: "gemini-3.5-flash-lite",
-          contents: `
+    const explicitHumanRequest = isExplicitHumanHandoffRequest(cleanMessage);
+    let supportingChunks: ReturnType<typeof selectGroundingCandidates> = [];
+
+    if (!explicitHumanRequest) {
+      setStage("query_rewrite_decision");
+      const retrievalQueryResult = await resolveRetrievalQuery(
+        cleanMessage,
+        chronologicalPriorMessages.length > 0,
+        async () => {
+          setStage("gemini_query_rewrite");
+          const rewriteResponse = await ai.models.generateContent({
+            model: "gemini-3.5-flash-lite",
+            contents: `
 Conversation history:
 ${historyText || "No previous conversation."}
 
@@ -263,87 +280,88 @@ Rules:
 - Return ONLY the rewritten search query.
 - If the current question is already self-contained, return it unchanged.
 `,
-          config: { abortSignal: request.signal },
-        });
-        return rewriteResponse.text;
-      },
-      () => request.signal.aborted,
-    );
-    if (retrievalQueryResult.outcome === "original_after_timeout") {
-      console.warn("Chat query rewrite fallback:", JSON.stringify({
-        stage: "gemini_query_rewrite",
-        stageElapsedMs: Date.now() - currentStageStartedAt,
-        category: "deadline_exceeded",
-        upstreamStatus: 504,
-        fallback: "original_query",
-      }));
-    }
+            config: { abortSignal: request.signal },
+          });
+          return rewriteResponse.text;
+        },
+        () => request.signal.aborted,
+      );
+      if (retrievalQueryResult.outcome === "original_after_timeout") {
+        console.warn("Chat query rewrite fallback:", JSON.stringify({
+          stage: "gemini_query_rewrite",
+          stageElapsedMs: Date.now() - currentStageStartedAt,
+          category: "deadline_exceeded",
+          upstreamStatus: 504,
+          fallback: "original_query",
+        }));
+      }
 
-    // searchQuery is only for vector and keyword retrieval. Gemini answers the
-    // original cleanMessage, with prior turns supplied in its system instruction.
-    const searchQuery = retrievalQueryResult.query;
+      // searchQuery is only for vector and keyword retrieval. Gemini answers the
+      // original cleanMessage, with prior turns supplied in its system instruction.
+      const searchQuery = retrievalQueryResult.query;
 
-    setStage("gemini_query_embedding");
-    const embeddingResponse = await ai.models.embedContent({
-      model: EMBEDDING_MODEL,
-      contents: searchQuery,
-      config: {
-        taskType: "RETRIEVAL_QUERY",
-        outputDimensionality: EMBEDDING_DIMENSIONS,
-        abortSignal: request.signal,
-      },
-    });
-
-    const queryEmbedding = embeddingResponse.embeddings?.[0]?.values;
-
-    if (!queryEmbedding || queryEmbedding.length !== EMBEDDING_DIMENSIONS) {
-      throw new Error("Failed to generate query embedding.");
-    }
-
-    /* 7. Search knowledge base */
-    setStage("vector_search");
-    const keywordQuery = searchQuery.replace(/[^\w\s]/g, " ").trim();
-
-    const { data: chunks, error: searchError } = await supabase.rpc(
-      "match_document_chunks",
-      {
-        query_embedding: queryEmbedding,
-        match_count: MATCH_COUNT,
-        filter_user_id: user.id,
-        match_threshold: MATCH_THRESHOLD,
-      },
-    );
-
-    if (searchError) {
-      console.error("Chat database operation failed:", JSON.stringify({ stage: currentStage, code: searchError.code ?? null }));
-    }
-
-    setStage("keyword_search");
-    const { data: keywordChunks, error: keywordSearchError } =
-      await supabase.rpc("keyword_search_document_chunks", {
-        search_query: keywordQuery,
-        match_count: MATCH_COUNT,
-        filter_user_id: user.id,
+      setStage("gemini_query_embedding");
+      const embeddingResponse = await ai.models.embedContent({
+        model: EMBEDDING_MODEL,
+        contents: searchQuery,
+        config: {
+          taskType: "RETRIEVAL_QUERY",
+          outputDimensionality: EMBEDDING_DIMENSIONS,
+          abortSignal: request.signal,
+        },
       });
 
-    if (keywordSearchError) {
-      console.error("Chat database operation failed:", JSON.stringify({ stage: currentStage, code: keywordSearchError.code ?? null }));
+      const queryEmbedding = embeddingResponse.embeddings?.[0]?.values;
+
+      if (!queryEmbedding || queryEmbedding.length !== EMBEDDING_DIMENSIONS) {
+        throw new Error("Failed to generate query embedding.");
+      }
+
+      /* 7. Search knowledge base */
+      setStage("vector_search");
+      const keywordQuery = searchQuery.replace(/[^\w\s]/g, " ").trim();
+
+      const { data: chunks, error: searchError } = await supabase.rpc(
+        "match_document_chunks",
+        {
+          query_embedding: queryEmbedding,
+          match_count: MATCH_COUNT,
+          filter_user_id: user.id,
+          match_threshold: MATCH_THRESHOLD,
+        },
+      );
+
+      if (searchError) {
+        console.error("Chat database operation failed:", JSON.stringify({ stage: currentStage, code: searchError.code ?? null }));
+      }
+
+      setStage("keyword_search");
+      const { data: keywordChunks, error: keywordSearchError } =
+        await supabase.rpc("keyword_search_document_chunks", {
+          search_query: keywordQuery,
+          match_count: MATCH_COUNT,
+          filter_user_id: user.id,
+        });
+
+      if (keywordSearchError) {
+        console.error("Chat database operation failed:", JSON.stringify({ stage: currentStage, code: keywordSearchError.code ?? null }));
+      }
+
+      const vectorResults: VectorChunk[] = chunks ?? [];
+      const keywordResults: KeywordChunk[] = keywordChunks ?? [];
+
+      if (searchError) {
+        console.error("Chat database operation failed:", JSON.stringify({ stage: currentStage, code: searchError.code ?? null }));
+        throw new Error("Failed to search knowledge base.");
+      }
+
+      const candidates = selectGroundingCandidates(vectorResults, keywordResults);
+      // searchQuery carries resolved references from the authenticated conversation,
+      // so a supported follow-up is not rejected merely because it uses "it" or "that".
+      setStage("grounding_assessment");
+      const supportingNumbers = await assessGrounding(ai, searchQuery, candidates, request.signal);
+      supportingChunks = sourcesForNumbers(candidates, supportingNumbers);
     }
-
-    const vectorResults: VectorChunk[] = chunks ?? [];
-    const keywordResults: KeywordChunk[] = keywordChunks ?? [];
-
-    if (searchError) {
-      console.error("Chat database operation failed:", JSON.stringify({ stage: currentStage, code: searchError.code ?? null }));
-      throw new Error("Failed to search knowledge base.");
-    }
-
-    const candidates = selectGroundingCandidates(vectorResults, keywordResults);
-    // searchQuery carries resolved references from the authenticated conversation,
-    // so a supported follow-up is not rejected merely because it uses "it" or "that".
-    setStage("grounding_assessment");
-    const supportingNumbers = await assessGrounding(ai, searchQuery, candidates, request.signal);
-    const supportingChunks = sourcesForNumbers(candidates, supportingNumbers);
 
     /* 10. Build system instruction */
     const systemInstruction = `
@@ -404,9 +422,16 @@ Use the recent conversation to resolve references such as "they", "it", "that", 
         };
         const close = () => { try { controller.close(); } catch { /* Already cancelled. */ } };
         try {
-          let fullAssistantResponse = fallbackMessage;
+          let fullAssistantResponse = explicitHumanRequest
+            ? explicitHandoffResponseMessage(
+                handoffIntro,
+                handoffEnabled,
+                unknownAnswerBehavior,
+                configuredUnknownAnswerMessage,
+              )
+            : fallbackMessage;
           let citedChunks: typeof supportingChunks = [];
-          if (supportingChunks.length > 0) {
+          if (!explicitHumanRequest && supportingChunks.length > 0) {
             setStage("gemini_answer_generation");
             const groundedAnswer = await generateGroundedAnswerStream(
               answerAi,
@@ -469,12 +494,25 @@ Use the recent conversation to resolve references such as "they", "it", "that", 
           if (updateError) {
             console.error("Conversation update error:", updateError.code);
           }
+          const isTurnAbstention =
+            !explicitHumanRequest &&
+            sources.length === 0 &&
+            isKnownAbstentionMessage(fullAssistantResponse, fallbackMessage);
+          const turnEscalation = evaluateEscalationTrigger({
+            message: cleanMessage,
+            isAbstention: isTurnAbstention,
+            consecutiveAbstentions: isTurnAbstention ? priorConsecutiveAbstentions + 1 : 0,
+            handoffEnabled,
+            unknownAnswerBehavior,
+          });
           send("complete", {
             sources,
             conversationId: conversationIdForResponse,
             assistantMessageId: assistantMessage.id,
             userMessageId: userMessage.id,
             retrievalState: getRetrievalState(sources),
+            handoffAvailable: turnEscalation.shouldOfferHandoff,
+            ...(turnEscalation.reason ? { escalationReason: turnEscalation.reason } : {}),
           });
           close();
         } catch (error) {

@@ -112,9 +112,11 @@ export type WidgetHandoffRequest = {
   type: "supportai:handoff-request";
   requestId: string;
   assistantId?: unknown;
+  conversationId?: string;
   customerName?: string;
   customerEmail?: string;
   reason: string;
+  latestMessage?: string;
   transcript: Array<{ role: "user" | "assistant"; content: string }>;
 };
 
@@ -128,6 +130,12 @@ export function isWidgetHandoffRequest(value: unknown): value is WidgetHandoffRe
     typeof candidate.reason === "string" &&
     candidate.reason.trim().length > 0 &&
     candidate.reason.length <= 2000 &&
+    (candidate.conversationId === undefined ||
+      (typeof candidate.conversationId === "string" &&
+        candidate.conversationId.length <= 128)) &&
+    (candidate.latestMessage === undefined ||
+      (typeof candidate.latestMessage === "string" &&
+        candidate.latestMessage.length <= WIDGET_MAX_MESSAGE_LENGTH)) &&
     Array.isArray(candidate.transcript) &&
     candidate.transcript.length <= 50;
 }

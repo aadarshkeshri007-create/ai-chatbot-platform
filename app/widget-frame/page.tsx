@@ -23,6 +23,15 @@ import {
   readHandoffAccess,
   saveHandoffAccess,
 } from "@/lib/handoff-session";
+import {
+  clearDismissedEscalations,
+  dismissEscalationTurn,
+  isEscalationTurnDismissed,
+} from "@/lib/handoff";
+import {
+  isKnownAbstentionMessage,
+  type EscalationReason,
+} from "@/lib/assistant-behavior";
 import { getHandoffPollOutcome } from "@/lib/handoff-resolution";
 import {
   classifyPendingQuestion,
@@ -152,6 +161,9 @@ export default function WidgetFrame() {
   const [contactNotice, setContactNotice] = useState("");
   const [contactSubmitting, setContactSubmitting] = useState(false);
   const [escalatedTurnId, setEscalatedTurnId] = useState<string | null>(null);
+  const [escalationReason, setEscalationReason] = useState<EscalationReason | null>(null);
+  const contactSubmittingRef = useRef(false);
+  const contactRequestIdRef = useRef<string | null>(null);
 
   const [handoffEnabled, setHandoffEnabled] = useState(true);
   const [handoffIntro, setHandoffIntro] = useState("You can send a request to the support team. A reply may not be immediate.");
@@ -231,15 +243,21 @@ export default function WidgetFrame() {
   const clearLocalSession = useCallback(() => {
     clearHandoffAccess(localStorage);
     clearPendingQuestion(assistantId, localStorage);
+    clearDismissedEscalations(assistantId, localStorage);
     retryRef.current = null;
+    contactRequestIdRef.current = null;
+    contactSubmittingRef.current = false;
     window.clearTimeout(restoreTimerRef.current);
     setRestoreState("ready");
     setRestoreNotice("");
     setLocalHandoffAccess(null);
     setHandoffPollUnavailable(false);
     setHandoffNotice("");
+    setContactNotice("");
+    setLeadNotice("");
     setShowContactForm(false);
     setEscalatedTurnId(null);
+    setEscalationReason(null);
     setSeenHumanMessages([]);
     setConversationId("");
     setMessages([{ role: "assistant", content: welcomeMessage }]);
@@ -262,7 +280,11 @@ export default function WidgetFrame() {
           return;
         }
         const payload = event.data.payload as {
-          conversation_id?: unknown; messages?: unknown; expired?: unknown; escalation_request_id?: unknown;
+          conversation_id?: unknown;
+          messages?: unknown;
+          expired?: unknown;
+          escalation_request_id?: unknown;
+          escalation_reason?: unknown;
         };
         const restored = Array.isArray(payload.messages) ? payload.messages.flatMap((item) => {
           if (!item || typeof item !== "object" || Array.isArray(item)) return [];
@@ -287,7 +309,24 @@ export default function WidgetFrame() {
         } else if (restored.length && typeof payload.conversation_id === "string") {
           setConversationId(payload.conversation_id);
           setMessages([{ role: "assistant", content: welcomeMessage }, ...restored]);
-          if (typeof payload.escalation_request_id === "string") setEscalatedTurnId(payload.escalation_request_id);
+          if (
+            typeof payload.escalation_request_id === "string" &&
+            !isEscalationTurnDismissed(assistantId, payload.escalation_request_id, localStorage) &&
+            !readSavedHandoffAccess(assistantId)
+          ) {
+            setEscalatedTurnId(payload.escalation_request_id);
+            const rawReason = payload.escalation_reason;
+            setEscalationReason(
+              rawReason === "explicit_request" ||
+                rawReason === "repeated_failures" ||
+                rawReason === "insufficient_evidence"
+                ? rawReason
+                : "insufficient_evidence",
+            );
+          } else {
+            setEscalatedTurnId(null);
+            setEscalationReason(null);
+          }
         }
         if (pending && payload.expired !== true) {
           if (classifyPendingQuestion(pending, restored.map((item) => ({ role: item.role, request_id: item.requestId }))) === "answered") {
@@ -305,7 +344,14 @@ export default function WidgetFrame() {
         const nextColor = normalizeBrandColor(event.data.brand_color);
         if (nextColor) setBrandColor(nextColor);
       } else if (event.data?.type === "supportai:handoff-config") {
-        if (typeof event.data.handoff_enabled === "boolean") setHandoffEnabled(event.data.handoff_enabled);
+        if (typeof event.data.handoff_enabled === "boolean") {
+          setHandoffEnabled(event.data.handoff_enabled);
+          if (!event.data.handoff_enabled) {
+            setEscalatedTurnId(null);
+            setEscalationReason(null);
+            setShowContactForm(false);
+          }
+        }
         if (typeof event.data.handoff_intro === "string" && event.data.handoff_intro.trim()) setHandoffIntro(event.data.handoff_intro.slice(0, 500));
       } else if (event.data?.type === "supportai:reset-session") {
         clearLocalSession();
@@ -376,6 +422,7 @@ export default function WidgetFrame() {
         response?: string;
         conversation_id?: string;
         handoff_available?: boolean;
+        escalation_reason?: EscalationReason;
         sources?: Source[];
       }>((resolve, reject) => {
         const timeout = window.setTimeout(() => {
@@ -403,7 +450,8 @@ export default function WidgetFrame() {
               window.removeEventListener("message", onMessage);
               resolve(event.data.payload as {
                 assistant_name?: string; welcome_message?: string; response?: string;
-                conversation_id?: string; handoff_available?: boolean; sources?: Source[];
+                conversation_id?: string; handoff_available?: boolean;
+                escalation_reason?: EscalationReason; sources?: Source[];
               });
               return;
             }
@@ -435,6 +483,7 @@ export default function WidgetFrame() {
             response?: string;
             conversation_id?: string;
             handoff_available?: boolean;
+            escalation_reason?: EscalationReason;
             sources?: Source[];
           });
         }
@@ -477,14 +526,25 @@ export default function WidgetFrame() {
       if (typeof payload.conversation_id === "string") setConversationId(payload.conversation_id);
       retryRef.current = null;
       clearPendingQuestion(assistantId, localStorage);
-      const isAbstention =
-        payload.handoff_available === true ||
-        payload.response === "I’m sorry, but the knowledge base doesn't contain enough information to answer that. Please contact the support team for help." ||
-        payload.response === "I'm sorry, but the knowledge base doesn't contain enough information to answer that. You can send a request to the support team for help." ||
-        payload.response === "I’m sorry, I don’t have enough information in my knowledge base to answer that question.";
-      if (isAbstention) {
+      const shouldOfferHandoff =
+        handoffEnabled &&
+        (payload.handoff_available === true ||
+          (payload.handoff_available === undefined &&
+            isKnownAbstentionMessage(payload.response ?? "")));
+      if (shouldOfferHandoff && !isEscalationTurnDismissed(assistantId, requestId, localStorage)) {
         setEscalatedTurnId(requestId);
+        const rawReason = payload.escalation_reason;
+        setEscalationReason(
+          rawReason === "explicit_request" ||
+            rawReason === "repeated_failures" ||
+            rawReason === "insufficient_evidence"
+            ? rawReason
+            : "insufficient_evidence",
+        );
         if (!contactMessage) setContactMessage(cleanMessage);
+      } else {
+        setEscalatedTurnId(null);
+        setEscalationReason(null);
       }
     } catch (requestError) {
       retryRef.current = { requestId, message: cleanMessage };
@@ -501,7 +561,11 @@ export default function WidgetFrame() {
 
   const submitContactSupport = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (contactSubmitting) return;
+    if (contactSubmitting || contactSubmittingRef.current) return;
+    if (!handoffEnabled) {
+      setContactNotice("Support requests are disabled for this assistant.");
+      return;
+    }
     const cleanEmail = contactEmail.trim();
     const cleanMsg = contactMessage.trim();
     const cleanNm = contactName.trim();
@@ -515,95 +579,74 @@ export default function WidgetFrame() {
       return;
     }
 
+    contactSubmittingRef.current = true;
     setContactSubmitting(true);
     setContactNotice("");
 
     try {
-      const requestId = crypto.randomUUID();
-      if (handoffEnabled) {
-        // Submit handoff request for live support inbox
-        const payload = await new Promise<Record<string, unknown>>((resolve, reject) => {
-          const timeout = window.setTimeout(() => {
-            window.removeEventListener("message", onMessage);
-            reject(new Error("The support request timed out. Please try again."));
-          }, WIDGET_REQUEST_TIMEOUT_MS + 1000);
+      const requestId = contactRequestIdRef.current ?? crypto.randomUUID();
+      contactRequestIdRef.current = requestId;
+      const latestUserMessage = [...messages].reverse().find((m) => m.role === "user")?.content ?? cleanMsg;
+      const transcriptPayload = messages
+        .filter((m): m is ChatMessage & { role: "user" | "assistant" } => m.role === "user" || m.role === "assistant")
+        .slice(-50)
+        .map(({ role, content }) => ({ role, content }));
 
-          function onMessage(e: MessageEvent) {
-            if (!isTrustedWidgetMessage(e.source, window.parent, e.origin, parentOrigin) ||
-              e.data?.type !== "supportai:handoff-response" ||
-              e.data.requestId !== requestId) return;
-            window.clearTimeout(timeout);
-            window.removeEventListener("message", onMessage);
-            if (!e.data.ok) reject(new Error("Unable to submit your support request right now."));
-            else resolve(e.data.payload as Record<string, unknown>);
+      // Submit handoff request for live support inbox (and best-effort lead sync on server)
+      const payload = await new Promise<Record<string, unknown>>((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener("message", onMessage);
+          reject(new Error("The support request timed out. Please try again."));
+        }, WIDGET_REQUEST_TIMEOUT_MS + 1000);
+
+        function onMessage(e: MessageEvent) {
+          if (!isTrustedWidgetMessage(e.source, window.parent, e.origin, parentOrigin) ||
+            e.data?.type !== "supportai:handoff-response" ||
+            e.data.requestId !== requestId) return;
+          window.clearTimeout(timeout);
+          window.removeEventListener("message", onMessage);
+          if (!e.data.ok) {
+            reject(
+              new Error(
+                typeof e.data.error === "string" && e.data.error.trim()
+                  ? e.data.error
+                  : "Unable to submit your support request right now.",
+              ),
+            );
+          } else {
+            resolve(e.data.payload as Record<string, unknown>);
           }
-          window.addEventListener("message", onMessage);
-          postToParent({
-            type: "supportai:handoff-request",
-            requestId,
-            assistantId,
-            customerName: cleanNm || undefined,
-            customerEmail: cleanEmail,
-            reason: cleanMsg,
-            conversationId,
-            transcript: messages.slice(-50).map(({ role, content }) => ({ role, content })),
-          });
-        });
-
-        if (typeof payload.handoff_id === "string" && typeof payload.access_token === "string") {
-          const access = { id: payload.handoff_id, token: payload.access_token };
-          setLocalHandoffAccess(access);
-          saveHandoffAccess(assistantId, access, localStorage);
-          setHandoffPollUnavailable(false);
-          setHandoffNotice("Your message has been sent to our support team. We'll follow up shortly.");
         }
-
-        // Also submit lead in background if configured
+        window.addEventListener("message", onMessage);
         postToParent({
-          type: "supportai:lead-request",
-          requestId: crypto.randomUUID(),
+          type: "supportai:handoff-request",
+          requestId,
           assistantId,
-          name: cleanNm || "Website visitor",
-          email: cleanEmail,
-          question: cleanMsg,
+          customerName: cleanNm || undefined,
+          customerEmail: cleanEmail,
+          reason: cleanMsg,
+          latestMessage: latestUserMessage.slice(0, WIDGET_MAX_MESSAGE_LENGTH),
+          ...(conversationId ? { conversationId } : {}),
+          transcript: transcriptPayload,
         });
+      });
 
-        setShowContactForm(false);
-      } else {
-        // Fallback to direct lead submission if handoff is disabled
-        const leadResult = await new Promise<{ success?: boolean }>((resolve, reject) => {
-          const timeout = window.setTimeout(() => {
-            window.removeEventListener("message", onMsg);
-            reject(new Error("Lead submission timed out. Please try again."));
-          }, WIDGET_REQUEST_TIMEOUT_MS + 1000);
-
-          function onMsg(e: MessageEvent) {
-            if (!isTrustedWidgetMessage(e.source, window.parent, e.origin, parentOrigin) ||
-              e.data?.type !== "supportai:lead-response" || e.data.requestId !== requestId) return;
-            window.clearTimeout(timeout);
-            window.removeEventListener("message", onMsg);
-            if (e.data.ok === true) resolve(e.data.payload as { success?: boolean });
-            else reject(new Error(typeof e.data.error === "string" ? e.data.error : "Unable to submit your details right now."));
-          }
-          window.addEventListener("message", onMsg);
-          postToParent({
-            type: "supportai:lead-request",
-            requestId,
-            assistantId,
-            name: cleanNm || "Website visitor",
-            email: cleanEmail,
-            question: cleanMsg,
-          });
-        });
-
-        if (leadResult.success) {
-          setLeadNotice("Thanks! Your message has been sent to our team.");
-          setShowContactForm(false);
-        }
+      if (typeof payload.handoff_id === "string" && typeof payload.access_token === "string") {
+        const access = { id: payload.handoff_id, token: payload.access_token };
+        setLocalHandoffAccess(access);
+        saveHandoffAccess(assistantId, access, localStorage);
+        setHandoffPollUnavailable(false);
+        setHandoffNotice("Thanks! Your request has been sent to our support team.");
       }
+
+      contactRequestIdRef.current = null;
+      setEscalatedTurnId(null);
+      setEscalationReason(null);
+      setShowContactForm(false);
     } catch (err) {
       setContactNotice(err instanceof Error ? err.message : "Unable to send your message right now.");
     } finally {
+      contactSubmittingRef.current = false;
       setContactSubmitting(false);
     }
   };
@@ -696,6 +739,8 @@ export default function WidgetFrame() {
           --widget-bg: #f1f5f2;
           --widget-bubble-bg: #fcfdfc;
           --widget-bubble-border: #d5e0d9;
+          --widget-panel-bg: #fcfdfc;
+          --widget-panel-border: #d5e0d9;
           --widget-assistant-text: #17241f;
           --widget-assistant-heading: #17241f;
           --widget-assistant-muted: #52635b;
@@ -710,8 +755,12 @@ export default function WidgetFrame() {
           --widget-input-bg: #fcfdfc;
           --widget-input-border: #c2d0c7;
           --widget-input-text: #17241f;
+          --widget-input-placeholder: #82958c;
+          --widget-send-btn-bg: var(--widget-brand);
+          --widget-send-btn-text: var(--widget-brand-text);
           --widget-source-bg: #e8efeb;
           --widget-source-text: #17241f;
+          --widget-source-border: transparent;
           --widget-source-label: #52635b;
           --widget-error-bg: #f6e8e5;
           --widget-error-border: #e8c0ba;
@@ -719,77 +768,107 @@ export default function WidgetFrame() {
           --widget-status-bg: #e0efe6;
           --widget-status-border: #b6d3c4;
           --widget-status-text: #256f51;
+          --widget-focus: #92d0b2;
+          --widget-scrollbar: #c2d0c7;
+          --widget-typing-dot: #6c8178;
         }
         :root.dark .widget,
         .dark .widget,
         .widget.dark {
-          --widget-bg: #0e1714;
-          --widget-bubble-bg: #15211c;
-          --widget-bubble-border: #304139;
-          --widget-assistant-text: #e7f0ea;
-          --widget-assistant-heading: #fcfdfc;
-          --widget-assistant-muted: #a8bbb0;
-          --widget-code-bg: #1b2b24;
-          --widget-code-text: #e7f0ea;
-          --widget-human-bg: #203d31;
-          --widget-human-border: #355b49;
-          --widget-human-text: #dcebe4;
-          --widget-system-bg: #15211c;
-          --widget-system-border: #304139;
-          --widget-system-text: #a8bbb0;
-          --widget-input-bg: #15211c;
-          --widget-input-border: #304139;
-          --widget-input-text: #e7f0ea;
-          --widget-source-bg: #1b2b24;
-          --widget-source-text: #e7f0ea;
-          --widget-source-label: #a8bbb0;
-          --widget-error-bg: #432522;
-          --widget-error-border: #6c3933;
-          --widget-error-text: #f09a91;
-          --widget-status-bg: #193b2a;
-          --widget-status-border: #31583f;
-          --widget-status-text: #8bcaa3;
+          --widget-bg: #0C1916;
+          --widget-bubble-bg: #20352F;
+          --widget-bubble-border: #36534A;
+          --widget-panel-bg: #172A25;
+          --widget-panel-border: #2B453D;
+          --widget-assistant-text: #F0F8F5;
+          --widget-assistant-heading: #F0F8F5;
+          --widget-assistant-muted: #B3C9C2;
+          --widget-code-bg: #13231E;
+          --widget-code-text: #3DDBC0;
+          --widget-human-bg: #1E3B32;
+          --widget-human-border: #365F50;
+          --widget-human-text: #E7F6F0;
+          --widget-system-bg: #172A25;
+          --widget-system-border: #2B453D;
+          --widget-system-text: #B3C9C2;
+          --widget-input-bg: #13231E;
+          --widget-input-border: #2B453D;
+          --widget-input-text: #F0F8F5;
+          --widget-input-placeholder: #728A81;
+          --widget-send-btn-bg: #3DDBC0;
+          --widget-send-btn-text: #06251D;
+          --widget-source-bg: #172A25;
+          --widget-source-text: #F0F8F5;
+          --widget-source-border: #2B453D;
+          --widget-source-label: #B3C9C2;
+          --widget-error-bg: #2B1614;
+          --widget-error-border: #522723;
+          --widget-error-text: #FCA5A5;
+          --widget-status-bg: #11261F;
+          --widget-status-border: #22483B;
+          --widget-status-text: #3DDBC0;
+          --widget-focus: #3DDBC0;
+          --widget-scrollbar: #2B453D;
+          --widget-typing-dot: #3DDBC0;
         }
         @media (prefers-color-scheme: dark) {
           :root:not(.light) .widget:not(.light) {
-            --widget-bg: #0e1714;
-            --widget-bubble-bg: #15211c;
-            --widget-bubble-border: #304139;
-            --widget-assistant-text: #e7f0ea;
-            --widget-assistant-heading: #fcfdfc;
-            --widget-assistant-muted: #a8bbb0;
-            --widget-code-bg: #1b2b24;
-            --widget-code-text: #e7f0ea;
-            --widget-human-bg: #203d31;
-            --widget-human-border: #355b49;
-            --widget-human-text: #dcebe4;
-            --widget-system-bg: #15211c;
-            --widget-system-border: #304139;
-            --widget-system-text: #a8bbb0;
-            --widget-input-bg: #15211c;
-            --widget-input-border: #304139;
-            --widget-input-text: #e7f0ea;
-            --widget-source-bg: #1b2b24;
-            --widget-source-text: #e7f0ea;
-            --widget-source-label: #a8bbb0;
-            --widget-error-bg: #432522;
-            --widget-error-border: #6c3933;
-            --widget-error-text: #f09a91;
-            --widget-status-bg: #193b2a;
-            --widget-status-border: #31583f;
-            --widget-status-text: #8bcaa3;
+            --widget-bg: #0C1916;
+            --widget-bubble-bg: #20352F;
+            --widget-bubble-border: #36534A;
+            --widget-panel-bg: #172A25;
+            --widget-panel-border: #2B453D;
+            --widget-assistant-text: #F0F8F5;
+            --widget-assistant-heading: #F0F8F5;
+            --widget-assistant-muted: #B3C9C2;
+            --widget-code-bg: #13231E;
+            --widget-code-text: #3DDBC0;
+            --widget-human-bg: #1E3B32;
+            --widget-human-border: #365F50;
+            --widget-human-text: #E7F6F0;
+            --widget-system-bg: #172A25;
+            --widget-system-border: #2B453D;
+            --widget-system-text: #B3C9C2;
+            --widget-input-bg: #13231E;
+            --widget-input-border: #2B453D;
+            --widget-input-text: #F0F8F5;
+            --widget-input-placeholder: #728A81;
+            --widget-send-btn-bg: #3DDBC0;
+            --widget-send-btn-text: #06251D;
+            --widget-source-bg: #172A25;
+            --widget-source-text: #F0F8F5;
+            --widget-source-border: #2B453D;
+            --widget-source-label: #B3C9C2;
+            --widget-error-bg: #2B1614;
+            --widget-error-border: #522723;
+            --widget-error-text: #FCA5A5;
+            --widget-status-bg: #11261F;
+            --widget-status-border: #22483B;
+            --widget-status-text: #3DDBC0;
+            --widget-focus: #3DDBC0;
+            --widget-scrollbar: #2B453D;
+            --widget-typing-dot: #3DDBC0;
           }
-          :root:not(.light) .widget:not(.light) .human-sender { color: #a1d5ba; }
-          :root:not(.light) .widget:not(.light) input:focus { outline-color: #92d0b2; }
-          :root:not(.light) .widget:not(.light) .widget-markdown a { color: #a1d5ba; }
-          :root:not(.light) .widget:not(.light) .handoff-btn { color: #a1d5ba; }
-          :root:not(.light) .widget:not(.light) .handoff-compose-note { color: #a8bbb0; }
+          :root:not(.light) .widget:not(.light) .human-sender { color: #3DDBC0; }
+          :root:not(.light) .widget:not(.light) input:focus,
+          :root:not(.light) .widget:not(.light) textarea:focus { outline-color: #3DDBC0; border-color: #3DDBC0; }
+          :root:not(.light) .widget:not(.light) .widget-markdown a { color: #3DDBC0; }
+          :root:not(.light) .widget:not(.light) .handoff-btn { color: #3DDBC0; }
+          :root:not(.light) .widget:not(.light) .handoff-compose-note { color: #B3C9C2; }
+          :root:not(.light) .widget:not(.light) .contact-trigger-btn { color: #3DDBC0; }
+          :root:not(.light) .widget:not(.light) .escalation-prompt-btn { border-color: #3DDBC0; color: #3DDBC0; }
         }
         :root.dark .widget-markdown a,
         :root.dark .handoff-btn,
         .dark .handoff-btn,
-        .dark .widget-markdown a {
-          color: #a1d5ba;
+        .dark .widget-markdown a,
+        :root.dark .contact-trigger-btn,
+        .dark .contact-trigger-btn {
+          color: #3DDBC0;
+        }
+        :root.dark .human-sender,
+        .dark .human-sender {
+          color: #3DDBC0;
         }
         .widget {
           display: flex; flex-direction: column;
@@ -819,10 +898,11 @@ export default function WidgetFrame() {
           border: 1.5px solid rgba(255,255,255,.35); border-radius: 9px;
           background: transparent; color: #fff; cursor: pointer;
           font-size: 16px; line-height: 1;
-          transition: background 150ms;
+          transition: background 150ms ease, transform 100ms ease;
         }
         .header-btn:hover { background: rgba(255,255,255,.15); }
-        .header-btn:focus-visible { outline: 3px solid #92d0b2; outline-offset: 2px; }
+        .header-btn:active { transform: scale(0.95); }
+        .header-btn:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
         .close-btn {
           flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
@@ -830,16 +910,35 @@ export default function WidgetFrame() {
           border: 1.5px solid rgba(255,255,255,.35); border-radius: 9px;
           background: transparent; color: #fff; cursor: pointer;
           font-size: 18px; line-height: 1;
-          transition: background 150ms;
+          transition: background 150ms ease, transform 100ms ease;
         }
         .close-btn:hover { background: rgba(255,255,255,.15); }
-        .close-btn:focus-visible { outline: 3px solid #92d0b2; outline-offset: 2px; }
+        .close-btn:active { transform: scale(0.95); }
+        .close-btn:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
         .messages {
           flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
           overscroll-behavior: contain;
           padding: 14px;
           background: var(--widget-bg);
+          scrollbar-width: thin;
+          scrollbar-color: var(--widget-scrollbar) transparent;
+        }
+        .messages::-webkit-scrollbar,
+        .unified-contact-form::-webkit-scrollbar,
+        .lead-form::-webkit-scrollbar {
+          width: 6px;
+        }
+        .messages::-webkit-scrollbar-track,
+        .unified-contact-form::-webkit-scrollbar-track,
+        .lead-form::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .messages::-webkit-scrollbar-thumb,
+        .unified-contact-form::-webkit-scrollbar-thumb,
+        .lead-form::-webkit-scrollbar-thumb {
+          background: var(--widget-scrollbar);
+          border-radius: 3px;
         }
         .message {
           max-width: 88%; margin: 0 0 12px;
@@ -874,7 +973,7 @@ export default function WidgetFrame() {
           color: var(--widget-source-label); font-size: 11px; font-weight: 700;
         }
         .human-sender { color: #2e7d5b; }
-        :root.dark .human-sender, .dark .human-sender { color: #a1d5ba; }
+        :root.dark .human-sender, .dark .human-sender { color: #3DDBC0; }
         .sender-avatar { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; flex-shrink: 0; }
         .widget-markdown {
           min-width: 0;
@@ -921,7 +1020,11 @@ export default function WidgetFrame() {
         .widget-markdown a {
           color: var(--widget-brand-link);
           text-decoration: underline;
+          text-underline-offset: 2px;
           overflow-wrap: anywhere;
+        }
+        :root.dark .widget-markdown a:hover, .dark .widget-markdown a:hover {
+          color: #5ff0d7;
         }
         .widget-markdown code {
           padding: .1em .3em;
@@ -937,11 +1040,12 @@ export default function WidgetFrame() {
           margin: .55em 0;
           padding: 10px 12px;
           border-radius: 8px;
-          background: #202c2a;
+          background: var(--widget-code-bg);
+          border: 1px solid var(--widget-bubble-border);
         }
         .widget-markdown pre code {
           background: none !important;
-          color: #e7f0ea !important;
+          color: var(--widget-assistant-text) !important;
           font-size: .85em;
         }
         .sources {
@@ -949,10 +1053,11 @@ export default function WidgetFrame() {
           color: var(--widget-source-label); font-size: 11px;
           display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center;
         }
-        .sources strong { flex-shrink: 0; }
+        .sources strong { flex-shrink: 0; font-weight: 600; }
         .source {
           display: inline-block; padding: 2px 7px; border-radius: 5px;
           background: var(--widget-source-bg); color: var(--widget-source-text);
+          border: 1px solid var(--widget-source-border);
           white-space: nowrap;
           max-width: min(160px, 45vw); overflow: hidden; text-overflow: ellipsis;
         }
@@ -973,12 +1078,13 @@ export default function WidgetFrame() {
           font-size: 12px;
         }
         .restore-status { display: flex; align-items: center; gap: 6px; padding: 18px 4px; color: var(--widget-source-label); font-size: 13px; }
-        .restore-status .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: #6c8178; animation: supportai-dot 1.2s ease-in-out infinite; }
+        .restore-status .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--widget-typing-dot); animation: supportai-dot 1.2s ease-in-out infinite; }
         .restore-status .typing-dot:nth-child(2) { animation-delay: .16s; } .restore-status .typing-dot:nth-child(3) { animation-delay: .32s; }
         .restore-error { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; font-size: 12px; color: var(--widget-error-text); background: var(--widget-error-bg); border-top: 1px solid var(--widget-error-border); }
         .restore-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-        .restore-actions button { min-height: 32px; padding: 0 12px; border: 1px solid currentColor; border-radius: 8px; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
-        .restore-actions button:focus-visible { outline: 3px solid #92d0b2; outline-offset: 2px; }
+        .restore-actions button { min-height: 32px; padding: 0 12px; border: 1px solid currentColor; border-radius: 8px; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; transition: opacity 150ms ease; }
+        .restore-actions button:hover { opacity: 0.85; }
+        .restore-actions button:focus-visible { outline: 2px solid var(--widget-focus); outline-offset: 2px; }
         @media (prefers-reduced-motion: reduce) { .restore-status .typing-dot { animation: none; opacity: .75; } }
         .handoff-compose-note {
           flex-shrink: 0;
@@ -988,15 +1094,16 @@ export default function WidgetFrame() {
           overflow-wrap: break-word;
           word-break: break-word;
           color: var(--widget-source-label);
-          background: var(--widget-bubble-bg);
+          background: var(--widget-panel-bg);
+          border-top: 1px solid var(--widget-panel-border);
           font-size: 12px; line-height: 1.4;
         }
         form {
           display: flex; gap: 8px;
           padding: 10px 12px;
           padding-bottom: max(10px, calc(10px + env(safe-area-inset-bottom, 0px)));
-          border-top: 1px solid var(--widget-bubble-border);
-          background: var(--widget-bubble-bg);
+          border-top: 1px solid var(--widget-panel-border);
+          background: var(--widget-panel-bg);
           flex-shrink: 0;
         }
         input {
@@ -1010,42 +1117,66 @@ export default function WidgetFrame() {
           /* 16px prevents iOS Safari auto-zoom on focus */
           font-size: 16px;
           -webkit-appearance: none;
+          transition: border-color 150ms ease;
         }
-        input:focus { outline: 3px solid #17241f; outline-offset: -1px; border-color: var(--widget-brand); }
-        :root.dark input:focus, .dark input:focus { outline-color: #92d0b2; }
-        input:disabled { opacity: .7; cursor: not-allowed; }
+        input::placeholder {
+          color: var(--widget-input-placeholder);
+          opacity: 1;
+        }
+        input:focus {
+          outline: 2px solid var(--widget-focus);
+          outline-offset: -1px;
+          border-color: var(--widget-focus);
+        }
+        :root.dark input:focus, .dark input:focus {
+          outline: 2px solid #3DDBC0;
+          border-color: #3DDBC0;
+        }
+        input:disabled { opacity: .6; cursor: not-allowed; }
         button[type=submit] {
           flex-shrink: 0;
           border: 0; border-radius: 10px;
           padding: 0 16px;
           min-height: 44px; min-width: 56px;
-          background: var(--widget-brand); color: var(--widget-brand-text);
+          background: var(--widget-send-btn-bg);
+          color: var(--widget-send-btn-text);
           cursor: pointer; font-weight: 600; font-size: 14px;
           -webkit-appearance: none;
+          transition: opacity 150ms ease, transform 100ms ease;
         }
-        button[type=submit]:disabled { cursor: wait; opacity: .55; }
-        button[type=submit]:focus-visible { outline: 3px solid #92d0b2; outline-offset: 2px; }
+        button[type=submit]:hover:not(:disabled) {
+          opacity: 0.92;
+        }
+        button[type=submit]:active:not(:disabled) {
+          transform: scale(0.97);
+        }
+        button[type=submit]:disabled { cursor: wait; opacity: .45; }
+        button[type=submit]:focus-visible { outline: 2px solid var(--widget-focus); outline-offset: 2px; }
         .typing { display: flex; align-items: center; gap: 5px; min-height: 36px; width: max-content; color: var(--widget-source-label); }
-        .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: #6c8178; animation: supportai-dot 1.2s ease-in-out infinite; }
+        .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--widget-typing-dot); animation: supportai-dot 1.2s ease-in-out infinite; }
         .typing-dot:nth-child(2) { animation-delay: .16s; } .typing-dot:nth-child(3) { animation-delay: .32s; }
         @keyframes supportai-dot { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
         @media (prefers-reduced-motion: reduce) { .typing-dot { animation: none; opacity: .75; } }
         .handoff-btn {
           flex-shrink: 0; width: 100%; border: 0;
-          border-top: 1px solid var(--widget-bubble-border);
+          border-top: 1px solid var(--widget-panel-border);
           padding: 10px 14px;
-          background: var(--widget-bubble-bg);
+          background: var(--widget-panel-bg);
           color: var(--widget-brand-link);
           cursor: pointer;
           font: 600 13px var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif); text-align: left;
+          transition: background 150ms ease, color 150ms ease;
+        }
+        .handoff-btn:hover {
+          background: var(--widget-bubble-bg);
         }
         .handoff-btn:focus-visible, .handoff-actions button:focus-visible {
-          outline: 3px solid #92d0b2; outline-offset: -2px;
+          outline: 2px solid var(--widget-focus); outline-offset: -2px;
         }
         .handoff-form {
           display: flex; flex-direction: column; gap: 8px; padding: 12px;
-          border-top: 1px solid var(--widget-bubble-border);
-          background: var(--widget-bubble-bg);
+          border-top: 1px solid var(--widget-panel-border);
+          background: var(--widget-panel-bg);
           color: var(--widget-input-text);
           flex-shrink: 0;
           font-size: 13px;
@@ -1062,13 +1193,18 @@ export default function WidgetFrame() {
         .handoff-actions { display: flex; gap: 8px; }
         .handoff-actions button {
           min-height: 38px; padding: 0 12px; border: 0; border-radius: 8px;
-          background: var(--widget-brand); color: var(--widget-brand-text); cursor: pointer; font-weight: 600;
+          background: var(--widget-send-btn-bg); color: var(--widget-send-btn-text); cursor: pointer; font-weight: 600;
+          transition: opacity 150ms ease, transform 100ms ease;
         }
+        .handoff-actions button:hover:not(:disabled) { opacity: 0.92; }
+        .handoff-actions button:active:not(:disabled) { transform: scale(0.97); }
         .handoff-actions button:last-child {
           background: var(--widget-source-bg);
           color: var(--widget-source-text);
+          border: 1px solid var(--widget-source-border);
         }
-                .handoff-actions button:disabled { opacity: .55; cursor: wait; }
+        .handoff-actions button:last-child:hover:not(:disabled) { background: var(--widget-bubble-bg); }
+        .handoff-actions button:disabled { opacity: .55; cursor: wait; }
         .theme-btn {
           display: flex;
           align-items: center;
@@ -1082,18 +1218,24 @@ export default function WidgetFrame() {
           margin: 6px 0 12px;
           padding: 10px 14px;
           border-radius: 10px;
-          background: var(--widget-bubble-bg);
-          border: 1px dashed var(--widget-bubble-border);
+          background: var(--widget-panel-bg);
+          border: 1px dashed var(--widget-panel-border);
           display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 8px;
           font-size: 13px;
         }
         .escalation-prompt-text {
           color: var(--widget-assistant-muted);
           line-height: 1.4;
           font-weight: 500;
+        }
+        .escalation-prompt-actions {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 8px;
         }
         .escalation-prompt-btn {
           flex-shrink: 0;
@@ -1105,37 +1247,89 @@ export default function WidgetFrame() {
           font-size: 12px;
           font-weight: 600;
           cursor: pointer;
-          transition: background 150ms, color 150ms, border-color 150ms;
+          transition: background 150ms ease, color 150ms ease, border-color 150ms ease, transform 100ms ease;
+        }
+        :root.dark .escalation-prompt-btn, .dark .escalation-prompt-btn {
+          border-color: #3DDBC0;
+          color: #3DDBC0;
         }
         .escalation-prompt-btn:hover {
           background: var(--widget-brand);
           color: var(--widget-brand-text);
           border-color: var(--widget-brand);
         }
+        :root.dark .escalation-prompt-btn:hover, .dark .escalation-prompt-btn:hover {
+          background: #3DDBC0;
+          color: #06251D;
+          border-color: #3DDBC0;
+        }
+        .escalation-prompt-btn:active {
+          transform: scale(0.97);
+        }
+        .escalation-prompt-btn:focus-visible {
+          outline: 2px solid var(--widget-focus);
+          outline-offset: 2px;
+        }
+        .escalation-dismiss-btn {
+          flex-shrink: 0;
+          border: 1px solid transparent;
+          background: transparent;
+          color: var(--widget-assistant-muted);
+          border-radius: 7px;
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: color 150ms ease, background 150ms ease;
+        }
+        .escalation-dismiss-btn:hover {
+          color: var(--widget-assistant-text);
+          background: var(--widget-source-bg);
+        }
+        .escalation-dismiss-btn:focus-visible {
+          outline: 2px solid var(--widget-focus);
+          outline-offset: 2px;
+        }
         .contact-trigger-row {
           display: flex;
           align-items: center;
           padding: 8px 14px;
-          border-top: 1px solid var(--widget-bubble-border);
-          background: var(--widget-bubble-bg);
+          border-top: 1px solid var(--widget-panel-border);
+          background: var(--widget-panel-bg);
           flex-shrink: 0;
         }
         .contact-trigger-btn {
           background: none;
           border: none;
-          padding: 0;
+          padding: 4px 6px;
+          margin: -4px -6px;
+          border-radius: 6px;
           color: var(--widget-brand-link);
           font: 600 13px var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
           cursor: pointer;
           display: inline-flex;
           align-items: center;
-          gap: 6px;
+          gap: 7px;
+          transition: background 150ms ease, color 150ms ease, opacity 100ms ease;
+        }
+        .contact-trigger-btn svg {
+          flex-shrink: 0;
+          stroke: currentColor;
         }
         .contact-trigger-btn:hover {
           text-decoration: underline;
         }
+        :root.dark .contact-trigger-btn:hover, .dark .contact-trigger-btn:hover {
+          text-decoration: none;
+          background: rgba(61, 219, 192, 0.12);
+          color: #5ff0d7;
+        }
+        .contact-trigger-btn:active {
+          opacity: 0.85;
+          transform: scale(0.98);
+        }
         .contact-trigger-btn:focus-visible {
-          outline: 3px solid #92d0b2;
+          outline: 2px solid var(--widget-focus);
           outline-offset: 2px;
           border-radius: 4px;
         }
@@ -1144,13 +1338,15 @@ export default function WidgetFrame() {
           flex-direction: column;
           gap: 8px;
           padding: 12px 14px;
-          border-top: 1px solid var(--widget-bubble-border);
-          background: var(--widget-bubble-bg);
+          border-top: 1px solid var(--widget-panel-border);
+          background: var(--widget-panel-bg);
           color: var(--widget-input-text);
           flex-shrink: 0;
           font-size: 13px;
           max-height: 58vh;
           overflow-y: auto;
+          scrollbar-width: thin;
+          scrollbar-color: var(--widget-scrollbar) transparent;
         }
         .unified-contact-form strong {
           font-size: 14px;
@@ -1166,7 +1362,7 @@ export default function WidgetFrame() {
         .unified-contact-form label {
           display: flex;
           flex-direction: column;
-          gap: 3px;
+          gap: 4px;
           font-weight: 600;
           font-size: 12px;
           color: var(--widget-assistant-text);
@@ -1175,13 +1371,19 @@ export default function WidgetFrame() {
         .unified-contact-form textarea {
           width: 100%;
           min-width: 0;
-          padding: 7px 10px;
+          padding: 8px 10px;
           border: 1px solid var(--widget-input-border);
           border-radius: 8px;
           color: var(--widget-input-text);
           background: var(--widget-input-bg);
           font: inherit;
           font-size: 13px;
+          transition: border-color 150ms ease;
+        }
+        .unified-contact-form input::placeholder,
+        .unified-contact-form textarea::placeholder {
+          color: var(--widget-input-placeholder);
+          opacity: 1;
         }
         .unified-contact-form textarea {
           min-height: 54px;
@@ -1189,8 +1391,34 @@ export default function WidgetFrame() {
         }
         .unified-contact-form input:focus,
         .unified-contact-form textarea:focus {
-          outline: 2px solid var(--widget-brand);
+          outline: 2px solid var(--widget-focus);
           outline-offset: -1px;
+          border-color: var(--widget-focus);
+        }
+        :root.dark .unified-contact-form input:focus,
+        :root.dark .unified-contact-form textarea:focus,
+        .dark .unified-contact-form input:focus,
+        .dark .unified-contact-form textarea:focus {
+          outline: 2px solid #3DDBC0;
+          border-color: #3DDBC0;
+        }
+        .unified-contact-close {
+          background: none;
+          border: none;
+          color: var(--widget-assistant-muted);
+          cursor: pointer;
+          font-size: 16px;
+          padding: 2px 6px;
+          border-radius: 4px;
+          transition: color 150ms ease, background 150ms ease;
+        }
+        .unified-contact-close:hover {
+          color: var(--widget-assistant-text);
+          background: rgba(255, 255, 255, 0.08);
+        }
+        .unified-contact-close:focus-visible {
+          outline: 2px solid var(--widget-focus);
+          outline-offset: 1px;
         }
         .unified-contact-actions {
           display: flex;
@@ -1205,21 +1433,35 @@ export default function WidgetFrame() {
           font-weight: 600;
           font-size: 13px;
           cursor: pointer;
-          transition: opacity 150ms;
+          transition: opacity 150ms ease, transform 100ms ease;
+        }
+        .unified-contact-actions button:active:not(:disabled) {
+          transform: scale(0.98);
+        }
+        .unified-contact-actions button:focus-visible {
+          outline: 2px solid var(--widget-focus);
+          outline-offset: 2px;
         }
         .unified-contact-actions button[type="submit"] {
-          background: var(--widget-brand);
-          color: var(--widget-brand-text);
+          background: var(--widget-send-btn-bg);
+          color: var(--widget-send-btn-text);
+        }
+        .unified-contact-actions button[type="submit"]:hover:not(:disabled) {
+          opacity: 0.92;
         }
         .unified-contact-actions button[type="button"] {
           background: var(--widget-source-bg);
           color: var(--widget-source-text);
+          border: 1px solid var(--widget-source-border);
+        }
+        .unified-contact-actions button[type="button"]:hover:not(:disabled) {
+          background: var(--widget-bubble-bg);
         }
         .unified-contact-actions button:disabled {
           opacity: 0.55;
           cursor: wait;
         }
-        .lead-form { max-height: 42vh; overflow-y: auto; }
+        .lead-form { max-height: 42vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--widget-scrollbar) transparent; }
         .lead-form label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
         .lead-form input, .lead-form textarea { font-weight: 400; }
         .lead-form textarea { min-height: 72px; resize: vertical; }
@@ -1313,25 +1555,44 @@ export default function WidgetFrame() {
                 ))}
               </div>
             )}
-            {item.role === "assistant" && item.requestId && escalatedTurnId === item.requestId && !showContactForm && (
+            {handoffEnabled && !handoffAccess && item.role === "assistant" && item.requestId && escalatedTurnId === item.requestId && !showContactForm && (
               <div className="escalation-prompt" role="region" aria-label="Support team recommendation">
                 <span className="escalation-prompt-text">
-                  Would you like our human team to follow up on this?
+                  {escalationReason === "explicit_request"
+                    ? "Send a request to our support team below, or keep chatting with the AI assistant here."
+                    : escalationReason === "repeated_failures"
+                      ? "Still not finding what you need? You can send a request to our support team, or keep asking questions below."
+                      : "Need help beyond our knowledge base? You can send a request to our support team, or keep chatting here."}
                 </span>
-                <button
-                  type="button"
-                  className="escalation-prompt-btn"
-                  onClick={() => {
-                    const lastUser = [...messages].reverse().find((m) => m.role === "user");
-                    if (lastUser && !contactMessage) {
-                      setContactMessage(lastUser.content.slice(0, 2000));
-                    }
-                    setContactNotice("");
-                    setShowContactForm(true);
-                  }}
-                >
-                  Talk to our team →
-                </button>
+                <div className="escalation-prompt-actions">
+                  <button
+                    type="button"
+                    className="escalation-prompt-btn"
+                    onClick={() => {
+                      const lastUser = [...messages].reverse().find((m) => m.role === "user");
+                      if (lastUser && !contactMessage) {
+                        setContactMessage(lastUser.content.slice(0, 2000));
+                      }
+                      setContactNotice("");
+                      setShowContactForm(true);
+                    }}
+                  >
+                    Talk to our team →
+                  </button>
+                  <button
+                    type="button"
+                    className="escalation-dismiss-btn"
+                    onClick={() => {
+                      if (item.requestId) {
+                        dismissEscalationTurn(assistantId, item.requestId, localStorage);
+                      }
+                      setEscalatedTurnId(null);
+                      setEscalationReason(null);
+                    }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1371,7 +1632,7 @@ export default function WidgetFrame() {
           Start new conversation
         </button>
       )}
-      {!handoffAccess && !showContactForm && (
+      {handoffEnabled && !handoffAccess && !showContactForm && (
         <div className="contact-trigger-row">
           <button
             type="button"
@@ -1392,14 +1653,14 @@ export default function WidgetFrame() {
           </button>
         </div>
       )}
-      {showContactForm && !handoffAccess && (
+      {handoffEnabled && showContactForm && !handoffAccess && (
         <form className="unified-contact-form" onSubmit={submitContactSupport}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <strong>Talk to our team</strong>
             <button
               type="button"
               onClick={() => setShowContactForm(false)}
-              style={{ background: "none", border: "none", color: "var(--widget-assistant-muted)", cursor: "pointer", fontSize: "16px", padding: "2px 6px" }}
+              className="unified-contact-close"
               aria-label="Back to chat"
             >
               ✕
@@ -1410,7 +1671,10 @@ export default function WidgetFrame() {
             Your name
             <input
               value={contactName}
-              onChange={(e) => setContactName(e.target.value)}
+              onChange={(e) => {
+                setContactName(e.target.value);
+                if (contactNotice) setContactNotice("");
+              }}
               maxLength={120}
               placeholder="Jane Doe (optional)"
               autoComplete="name"
@@ -1420,7 +1684,10 @@ export default function WidgetFrame() {
             Your email <span style={{ color: "var(--widget-error-text)" }}>*</span>
             <input
               value={contactEmail}
-              onChange={(e) => setContactEmail(e.target.value)}
+              onChange={(e) => {
+                setContactEmail(e.target.value);
+                if (contactNotice) setContactNotice("");
+              }}
               maxLength={254}
               type="email"
               placeholder="jane@example.com"
@@ -1432,7 +1699,10 @@ export default function WidgetFrame() {
             Message <span style={{ color: "var(--widget-error-text)" }}>*</span>
             <textarea
               value={contactMessage}
-              onChange={(e) => setContactMessage(e.target.value)}
+              onChange={(e) => {
+                setContactMessage(e.target.value);
+                if (contactNotice) setContactNotice("");
+              }}
               maxLength={2000}
               rows={3}
               placeholder="How can our team help?"
