@@ -1,3 +1,11 @@
+import {
+  countConsecutiveAbstentions,
+  evaluateEscalationTrigger,
+  isExplicitHumanHandoffRequest,
+  isKnownAbstentionMessage,
+  type EscalationReason,
+  type UnknownAnswerBehavior,
+} from "./assistant-behavior.ts";
 import { safeWidgetSources } from "./widget-conversation.ts";
 import { widgetRetentionCutoff } from "./widget-retention.ts";
 
@@ -100,4 +108,53 @@ export function pendingEscalationRequestId(
   const last = messages[messages.length - 1];
   if (last?.role === "assistant" && last.content === fallbackMessage && last.request_id) return last.request_id;
   return null;
+}
+
+export function resolveRestoredEscalation(
+  messages: RestoredWidgetMessage[],
+  options: {
+    fallbackMessage: string;
+    handoffEnabled: boolean;
+    unknownAnswerBehavior: UnknownAnswerBehavior;
+    hasExistingHandoff?: boolean;
+  },
+): {
+  requestId: string | null;
+  reason: EscalationReason | null;
+} {
+  if (!options.handoffEnabled || options.hasExistingHandoff) {
+    return { requestId: null, reason: null };
+  }
+
+  const last = messages[messages.length - 1];
+  if (!last || last.role !== "assistant" || !last.request_id) {
+    return { requestId: null, reason: null };
+  }
+
+  const prev = messages[messages.length - 2];
+  const userContent = prev?.role === "user" ? prev.content : "";
+
+  if (userContent && isExplicitHumanHandoffRequest(userContent)) {
+    return { requestId: last.request_id, reason: "explicit_request" };
+  }
+
+  const isAbstention = isKnownAbstentionMessage(last.content, options.fallbackMessage);
+  if (!isAbstention) {
+    return { requestId: null, reason: null };
+  }
+
+  const consecutiveAbstentions = countConsecutiveAbstentions(messages, options.fallbackMessage);
+  const evaluation = evaluateEscalationTrigger({
+    message: userContent,
+    isAbstention: true,
+    consecutiveAbstentions,
+    handoffEnabled: options.handoffEnabled,
+    unknownAnswerBehavior: options.unknownAnswerBehavior,
+  });
+
+  if (!evaluation.shouldOfferHandoff) {
+    return { requestId: null, reason: null };
+  }
+
+  return { requestId: last.request_id, reason: evaluation.reason };
 }

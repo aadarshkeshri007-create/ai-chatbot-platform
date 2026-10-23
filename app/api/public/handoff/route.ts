@@ -1,13 +1,14 @@
 import {
-  HANDOFF_MAX_MESSAGE_LENGTH,
   HANDOFF_MAX_REASON_LENGTH,
   createHandoffAccessToken,
   createHandoffTokenHash,
   normalizeEmail,
   normalizeOptionalText,
   parseTranscript,
+  resolveHandoffLatestMessage,
 } from "@/lib/handoff";
 import { sendHandoffNotification } from "@/lib/handoff-email";
+import { createLeadWebhookPayload, deliverLeadToWebhook } from "@/lib/lead-webhook";
 import {
   hasDisallowedPublicChatOrigin,
   isAllowedAssistantOrigin,
@@ -16,11 +17,16 @@ import {
 } from "@/lib/public-chat-cors";
 import { checkPublicChatRateLimit } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { hashWidgetSessionToken, WIDGET_SESSION_TOKEN_PATTERN } from "@/lib/widget-conversation";
 import { isMissingSchemaFieldError } from "@/lib/supabase/error";
+import { hashWidgetSessionToken, WIDGET_SESSION_TOKEN_PATTERN } from "@/lib/widget-conversation";
+import { expireStaleVisitorConversation } from "@/lib/widget-restore";
+import { createSupabaseWidgetRestoreStore } from "@/lib/widget-restore-store";
+import { resolveWidgetRetentionDays } from "@/lib/widget-retention";
 
 const assistantIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const requestIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function genericError(request: Request, status = 400) {
   return publicChatJson(request, { error: "Unable to submit the support request." }, { status });
@@ -76,36 +82,118 @@ export async function POST(request: Request) {
     }
 
     const reason = normalizeOptionalText(body.reason, HANDOFF_MAX_REASON_LENGTH);
-    const latestMessage = normalizeOptionalText(body.latest_message, HANDOFF_MAX_MESSAGE_LENGTH);
     if (!reason) return genericError(request);
 
     const customerName = normalizeOptionalText(body.customer_name, 120);
-    const customerEmail = body.customer_email === undefined
+    const customerEmail = body.customer_email === undefined || body.customer_email === null
       ? null
       : normalizeEmail(body.customer_email);
     if (body.customer_email !== undefined && body.customer_email !== null && !customerEmail) {
       return genericError(request);
     }
 
-    let conversationId: string | null = null;
-    if (body.conversation_id !== undefined && body.conversation_id !== null) {
-      if (typeof body.conversation_id !== "string" || !assistantIdPattern.test(body.conversation_id) ||
-          typeof body.session_token !== "string" || !WIDGET_SESSION_TOKEN_PATTERN.test(body.session_token)) {
+    if (
+      body.request_id !== undefined &&
+      body.request_id !== null &&
+      (typeof body.request_id !== "string" || !requestIdPattern.test(body.request_id))
+    ) {
+      return genericError(request);
+    }
+    const requestId = typeof body.request_id === "string" ? body.request_id : null;
+
+    if (
+      body.session_token !== undefined &&
+      body.session_token !== null &&
+      (typeof body.session_token !== "string" || !WIDGET_SESSION_TOKEN_PATTERN.test(body.session_token))
+    ) {
+      return genericError(request);
+    }
+    const sessionToken = typeof body.session_token === "string" ? body.session_token : null;
+    const sessionHash = sessionToken ? hashWidgetSessionToken(sessionToken) : null;
+
+    if (
+      body.conversation_id !== undefined &&
+      body.conversation_id !== null &&
+      typeof body.conversation_id !== "string"
+    ) {
+      return genericError(request);
+    }
+    const requestedConversationId =
+      typeof body.conversation_id === "string" && body.conversation_id.trim().length > 0
+        ? body.conversation_id.trim()
+        : null;
+
+    if (requestedConversationId !== null) {
+      if (!assistantIdPattern.test(requestedConversationId) || !sessionHash) {
         return genericError(request);
       }
-      const { data: linkedConversation, error: linkedConversationError } = await supabase.from("conversations")
-        .select("id")
-        .eq("id", body.conversation_id)
+    }
+
+    const idempotencySeed =
+      requestId && sessionHash ? `${assistantId}:${sessionHash}:${requestId}` : undefined;
+    const access = createHandoffAccessToken(idempotencySeed);
+
+    if (idempotencySeed) {
+      const { data: existingHandoff, error: existingHandoffError } = await supabase
+        .from("handoff_requests")
+        .select("id, status")
         .eq("assistant_id", assistantId)
-        .eq("visitor_session_hash", hashWidgetSessionToken(body.session_token))
+        .eq("public_token_hash", access.hash)
         .maybeSingle();
-      if (linkedConversationError) return genericError(request, 503);
-      if (!linkedConversation) return genericError(request, 403);
-      conversationId = linkedConversation.id;
+      if (existingHandoffError) return genericError(request, 503);
+      if (existingHandoff) {
+        return publicChatJson(request, {
+          success: true,
+          handoff_id: existingHandoff.id,
+          access_token: access.token,
+          status: existingHandoff.status,
+          deduplicated: true,
+        }, undefined, profile.allowed_domains);
+      }
+    }
+
+    let conversationId: string | null = null;
+    if (sessionHash) {
+      let preExpiryOwnedConversation: { id: string } | null = null;
+      if (requestedConversationId) {
+        const { data: ownedBeforeExpiry, error: ownedError } = await supabase
+          .from("conversations")
+          .select("id")
+          .eq("id", requestedConversationId)
+          .eq("assistant_id", assistantId)
+          .eq("visitor_session_hash", sessionHash)
+          .maybeSingle();
+        if (ownedError) return genericError(request, 503);
+        if (!ownedBeforeExpiry) return genericError(request, 403);
+        preExpiryOwnedConversation = ownedBeforeExpiry;
+      }
+
+      const retentionDays = resolveWidgetRetentionDays(process.env.WIDGET_CONVERSATION_RETENTION_DAYS);
+      const restoreStore = createSupabaseWidgetRestoreStore(supabase);
+      const expired = await expireStaleVisitorConversation(restoreStore, {
+        assistantId,
+        sessionHash,
+        retentionDays,
+      });
+
+      if (!expired) {
+        if (preExpiryOwnedConversation) {
+          conversationId = preExpiryOwnedConversation.id;
+        } else {
+          const { data: activeConversation, error: activeConvError } = await supabase
+            .from("conversations")
+            .select("id")
+            .eq("assistant_id", assistantId)
+            .eq("visitor_session_hash", sessionHash)
+            .maybeSingle();
+          if (activeConvError) return genericError(request, 503);
+          conversationId = activeConversation?.id ?? null;
+        }
+      }
     }
 
     const transcript = parseTranscript(body.transcript);
-    const access = createHandoffAccessToken();
+    const latestMessage = resolveHandoffLatestMessage(body.latest_message, transcript, reason);
     const { data: handoff, error: insertError } = await supabase
       .from("handoff_requests")
       .insert({
@@ -121,20 +209,70 @@ export async function POST(request: Request) {
       })
       .select("id, status, created_at")
       .single();
-    if (insertError || !handoff) {
+
+    if (insertError) {
+      if (idempotencySeed && insertError.code === "23505") {
+        const { data: racedHandoff } = await supabase
+          .from("handoff_requests")
+          .select("id, status")
+          .eq("assistant_id", assistantId)
+          .eq("public_token_hash", access.hash)
+          .maybeSingle();
+        if (racedHandoff) {
+          return publicChatJson(request, {
+            success: true,
+            handoff_id: racedHandoff.id,
+            access_token: access.token,
+            status: racedHandoff.status,
+            deduplicated: true,
+          }, undefined, profile.allowed_domains);
+        }
+      }
+      console.error("[public-handoff] request-create-failed");
+      return genericError(request, 503);
+    }
+    if (!handoff) {
       console.error("[public-handoff] request-create-failed");
       return genericError(request, 503);
     }
 
-    if (transcript.length > 0) {
-      const { error: messageError } = await supabase.from("handoff_messages").insert(
-        transcript.filter((message) => message.role === "user").map((message) => ({
-          handoff_id: handoff.id,
-          role: "customer",
-          content: message.content,
-        })),
-      );
+    const customerMessages = transcript
+      .filter((message) => message.role === "user")
+      .map((message) => ({
+        handoff_id: handoff.id,
+        role: "customer" as const,
+        content: message.content,
+      }));
+    if (customerMessages.length > 0) {
+      const { error: messageError } = await supabase
+        .from("handoff_messages")
+        .insert(customerMessages);
       if (messageError) console.error("[public-handoff] transcript-save-failed");
+    }
+
+    if (customerEmail) {
+      try {
+        await supabase.from("leads").insert({
+          user_id: profile.id,
+          name: customerName,
+          email: customerEmail,
+          message: reason,
+          conversation_id: conversationId,
+        });
+        const webhookUrl = process.env.N8N_WEBHOOK_URL?.trim();
+        if (webhookUrl) {
+          await deliverLeadToWebhook(
+            webhookUrl,
+            createLeadWebhookPayload({
+              name: customerName || "Website visitor",
+              email: customerEmail,
+              question: reason,
+            }),
+          );
+        }
+      } catch {
+        // Best-effort lead record sync; handoff request is already persisted.
+      }
     }
 
     try {

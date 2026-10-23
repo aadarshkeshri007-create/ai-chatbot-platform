@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { hashWidgetSessionToken, isValidPublicChatTurnInput, safeWidgetSources, WIDGET_SESSION_TOKEN_PATTERN } from "@/lib/widget-conversation";
 import { resolveWidgetRetentionDays } from "@/lib/widget-retention";
-import { expireStaleVisitorConversation, pendingEscalationRequestId, restoreWidgetConversation } from "@/lib/widget-restore";
+import { expireStaleVisitorConversation, resolveRestoredEscalation, restoreWidgetConversation } from "@/lib/widget-restore";
 import { createSupabaseWidgetRestoreStore } from "@/lib/widget-restore-store";
 import { getAssistantSettings } from "@/lib/assistant-settings";
 import {
@@ -26,7 +26,16 @@ import {
   type KeywordChunk,
   type VectorChunk,
 } from "@/lib/grounded-answer";
-import { languageInstruction, responseToneInstruction, unknownAnswerMessage } from "@/lib/assistant-behavior";
+import {
+  countConsecutiveAbstentions,
+  evaluateEscalationTrigger,
+  explicitHandoffResponseMessage,
+  isExplicitHumanHandoffRequest,
+  isKnownAbstentionMessage,
+  languageInstruction,
+  responseToneInstruction,
+  unknownAnswerMessage,
+} from "@/lib/assistant-behavior";
 
 export const runtime = "nodejs";
 
@@ -82,8 +91,6 @@ export async function POST(request: Request) {
       { status: 413 },
     );
   }
-
-
 
   try {
     let body: unknown;
@@ -219,15 +226,24 @@ export async function POST(request: Request) {
       if (restored.status === "expired") return publicChatJson(request, { messages: [], expired: true }, undefined, assistant.allowed_domains);
       const restoreSettings = getAssistantSettings(assistant);
       const restoreFallback = unknownAnswerMessage(restoreSettings.unknownAnswerBehavior, restoreSettings.unknownAnswerMessage, restoreSettings.handoffEnabled);
-      const escalationRequestId = pendingEscalationRequestId(
-        restored.messages,
-        restoreFallback,
-        restoreSettings.handoffEnabled && restoreSettings.unknownAnswerBehavior === "offer_handoff",
-      );
+      const { data: existingHandoff } = await supabase
+        .from("handoff_requests")
+        .select("id")
+        .eq("assistant_id", assistantId)
+        .eq("conversation_id", restored.conversationId)
+        .limit(1)
+        .maybeSingle();
+      const restoredEscalation = resolveRestoredEscalation(restored.messages, {
+        fallbackMessage: restoreFallback,
+        handoffEnabled: restoreSettings.handoffEnabled,
+        unknownAnswerBehavior: restoreSettings.unknownAnswerBehavior,
+        hasExistingHandoff: Boolean(existingHandoff),
+      });
       return publicChatJson(request, {
         conversation_id: restored.conversationId,
         messages: restored.messages,
-        ...(escalationRequestId ? { escalation_request_id: escalationRequestId } : {}),
+        ...(restoredEscalation.requestId ? { escalation_request_id: restoredEscalation.requestId } : {}),
+        ...(restoredEscalation.reason ? { escalation_reason: restoredEscalation.reason } : {}),
       }, undefined, assistant.allowed_domains);
     }
 
@@ -245,33 +261,55 @@ export async function POST(request: Request) {
     }
     const settings = getAssistantSettings(assistant);
     const fallbackMessage = unknownAnswerMessage(settings.unknownAnswerBehavior, settings.unknownAnswerMessage, settings.handoffEnabled);
-    const handoffAvailableForUnknownAnswer = settings.handoffEnabled && settings.unknownAnswerBehavior === "offer_handoff";
     const { data: existingConversation, error: existingConversationError } = await supabase.from("conversations")
       .select("id").eq("assistant_id", assistantId).eq("visitor_session_hash", sessionHash).maybeSingle();
     if (existingConversationError) {
       logPublicChatError("conversation-restore", correlationId, existingConversationError);
       return publicChatJson(request, { error: "Unable to load this conversation." }, { status: 503 }, assistant.allowed_domains);
     }
+    let priorConsecutiveAbstentions = 0;
     if (existingConversation) {
-      const [{ data: existingUserMessage, error: existingUserError }, { data: existingAssistantMessage, error: existingAssistantError }] = await Promise.all([
+      const [
+        { data: existingUserMessage, error: existingUserError },
+        { data: existingAssistantMessage, error: existingAssistantError },
+        { data: recentMessages, error: recentMessagesError },
+      ] = await Promise.all([
         supabase.from("messages").select("content").eq("conversation_id", existingConversation.id)
           .eq("client_message_id", body.request_id).eq("role", "user").maybeSingle(),
         supabase.from("messages").select("content, sources").eq("conversation_id", existingConversation.id)
           .eq("client_message_id", body.request_id).eq("role", "assistant").maybeSingle(),
+        supabase.from("messages").select("role, content, created_at").eq("conversation_id", existingConversation.id)
+          .order("created_at", { ascending: false }).limit(20),
       ]);
-      if (existingUserError || existingAssistantError) {
-        logPublicChatError("conversation-restore", correlationId, existingUserError ?? existingAssistantError);
+      if (existingUserError || existingAssistantError || recentMessagesError) {
+        logPublicChatError("conversation-restore", correlationId, existingUserError ?? existingAssistantError ?? recentMessagesError);
         return publicChatJson(request, { error: "Unable to load this conversation." }, { status: 503 }, assistant.allowed_domains);
       }
+      const chronologicalMessages = [...(recentMessages ?? [])]
+        .filter((row): row is { role: string; content: string; created_at: string } =>
+          typeof row.role === "string" && typeof row.content === "string" && typeof row.created_at === "string",
+        )
+        .sort((a, b) => a.created_at.localeCompare(b.created_at));
+      priorConsecutiveAbstentions = countConsecutiveAbstentions(chronologicalMessages, fallbackMessage);
+
       if (existingUserMessage && existingUserMessage.content !== cleanMessage) {
         return publicChatJson(request, { error: "This request identifier has already been used." }, { status: 409 }, assistant.allowed_domains);
       }
       if (existingUserMessage && existingAssistantMessage) {
+        const isReplayAbstention = isKnownAbstentionMessage(existingAssistantMessage.content, fallbackMessage);
+        const replayEscalation = evaluateEscalationTrigger({
+          message: cleanMessage,
+          isAbstention: isReplayAbstention,
+          consecutiveAbstentions: priorConsecutiveAbstentions,
+          handoffEnabled: settings.handoffEnabled,
+          unknownAnswerBehavior: settings.unknownAnswerBehavior,
+        });
         return publicChatJson(request, {
           assistant_name: settings.assistantName,
           welcome_message: settings.welcomeMessage,
           response: existingAssistantMessage.content,
-          handoff_available: handoffAvailableForUnknownAnswer && existingAssistantMessage.content === fallbackMessage,
+          handoff_available: replayEscalation.shouldOfferHandoff,
+          ...(replayEscalation.reason ? { escalation_reason: replayEscalation.reason } : {}),
           sources: safeWidgetSources(existingAssistantMessage.sources),
           conversation_id: existingConversation.id,
         }, undefined, assistant.allowed_domains);
@@ -281,8 +319,6 @@ export async function POST(request: Request) {
         return publicChatJson(request, { error: "Unable to load this conversation." }, { status: 503 }, assistant.allowed_domains);
       }
     }
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
     const persistTurn = async (answer: string, sources: unknown[]) => {
       const normalizedSources = safeWidgetSources(sources);
@@ -319,6 +355,31 @@ export async function POST(request: Request) {
         sources: safeWidgetSources(storedAssistantMessage.sources),
       };
     };
+
+    if (isExplicitHumanHandoffRequest(cleanMessage)) {
+      const explicitReply = explicitHandoffResponseMessage(
+        settings.handoffIntro,
+        settings.handoffEnabled,
+        settings.unknownAnswerBehavior,
+        settings.unknownAnswerMessage,
+      );
+      const persisted = await persistTurn(explicitReply, []);
+      if (!persisted) {
+        return publicChatJson(request, { error: "Unable to save this conversation." }, { status: 503 }, assistant.allowed_domains);
+      }
+      return publicChatJson(request, {
+        assistant_name: settings.assistantName,
+        welcome_message: settings.welcomeMessage,
+        response: persisted.response,
+        handoff_available: settings.handoffEnabled,
+        ...(settings.handoffEnabled ? { escalation_reason: "explicit_request" } : {}),
+        sources: [],
+        conversation_id: persisted.conversationId,
+      }, undefined, assistant.allowed_domains);
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
     const ai = new GoogleGenAI({
       apiKey,
@@ -367,8 +428,15 @@ export async function POST(request: Request) {
       (vectorChunks ?? []) as VectorChunk[],
       (keywordChunks ?? []) as KeywordChunk[],
     );
-    const supportingNumbers = await assessGrounding(ai, cleanMessage, candidates);
+    const supportingNumbers = await assessGrounding(ai, cleanMessage, candidates, request.signal);
     const supportingChunks = sourcesForNumbers(candidates, supportingNumbers);
+    const abstentionEscalation = evaluateEscalationTrigger({
+      message: cleanMessage,
+      isAbstention: true,
+      consecutiveAbstentions: priorConsecutiveAbstentions + 1,
+      handoffEnabled: settings.handoffEnabled,
+      unknownAnswerBehavior: settings.unknownAnswerBehavior,
+    });
     if (supportingChunks.length === 0) {
       const persisted = await persistTurn(fallbackMessage, []);
       if (!persisted) return publicChatJson(request, { error: "Unable to save this conversation." }, { status: 503 }, assistant.allowed_domains);
@@ -376,7 +444,8 @@ export async function POST(request: Request) {
         assistant_name: settings.assistantName,
         welcome_message: settings.welcomeMessage,
         response: persisted.response,
-        handoff_available: handoffAvailableForUnknownAnswer,
+        handoff_available: abstentionEscalation.shouldOfferHandoff,
+        ...(abstentionEscalation.reason ? { escalation_reason: abstentionEscalation.reason } : {}),
         sources: [],
         conversation_id: persisted.conversationId,
       }, undefined, assistant.allowed_domains);
@@ -418,7 +487,20 @@ ${responseToneInstruction(settings.responseTone)} Use a ${settings.responseLengt
           );
           if (request.signal.aborted) return;
           if (!groundedAnswer) {
-            send("error", { message: "The assistant could not produce a grounded response. Please retry." });
+            send("delta", { text: fallbackMessage });
+            await completeAfterPersistence(
+              () => persistTurn(fallbackMessage, []),
+              (persisted) => send("complete", {
+                assistant_name: settings.assistantName,
+                welcome_message: settings.welcomeMessage,
+                response: persisted.response,
+                handoff_available: abstentionEscalation.shouldOfferHandoff,
+                ...(abstentionEscalation.reason ? { escalation_reason: abstentionEscalation.reason } : {}),
+                sources: [],
+                conversation_id: persisted.conversationId,
+              }),
+              () => send("error", { message: "The response was generated but could not be saved. Retry to safely complete this turn." }),
+            );
             close();
             return;
           }
@@ -431,14 +513,25 @@ ${responseToneInstruction(settings.responseTone)} Use a ${settings.responseLengt
           }])).values());
           await completeAfterPersistence(
             () => persistTurn(groundedAnswer.answer, sources),
-            (persisted) => send("complete", {
-              assistant_name: settings.assistantName,
-              welcome_message: settings.welcomeMessage,
-              response: persisted.response,
-              handoff_available: handoffAvailableForUnknownAnswer && persisted.response === fallbackMessage,
-              sources: persisted.sources,
-              conversation_id: persisted.conversationId,
-            }),
+            (persisted) => {
+              const isStreamAbstention = isKnownAbstentionMessage(persisted.response, fallbackMessage);
+              const streamEscalation = evaluateEscalationTrigger({
+                message: cleanMessage,
+                isAbstention: isStreamAbstention,
+                consecutiveAbstentions: isStreamAbstention ? priorConsecutiveAbstentions + 1 : 0,
+                handoffEnabled: settings.handoffEnabled,
+                unknownAnswerBehavior: settings.unknownAnswerBehavior,
+              });
+              send("complete", {
+                assistant_name: settings.assistantName,
+                welcome_message: settings.welcomeMessage,
+                response: persisted.response,
+                handoff_available: streamEscalation.shouldOfferHandoff,
+                ...(streamEscalation.reason ? { escalation_reason: streamEscalation.reason } : {}),
+                sources: persisted.sources,
+                conversation_id: persisted.conversationId,
+              });
+            },
             () => send("error", { message: "The response was generated but could not be saved. Retry to safely complete this turn." }),
           );
           close();
