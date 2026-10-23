@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { isPublicAssistantConfigRequest } from "./lib/public-assistant-config";
+import { isPublicInstallationVerificationRequest } from "./lib/widget-installation";
 
 export async function proxy(request: NextRequest) {
     const response = NextResponse.next({
@@ -25,6 +27,9 @@ export async function proxy(request: NextRequest) {
         normalizedPathname === "/widget-frame" ||
         normalizedPathname === "/api/auth/login" ||
         normalizedPathname === "/auth/callback" ||
+        (normalizedPathname === "/api/leads" && (request.method === "POST" || request.method === "OPTIONS")) ||
+        isPublicAssistantConfigRequest(request.method, normalizedPathname) ||
+        isPublicInstallationVerificationRequest(request.method, normalizedPathname) ||
         normalizedPathname === "/api/public/handoff" ||
         (normalizedPathname === "/api/public/chat" &&
             (request.method === "POST" || request.method === "OPTIONS"))

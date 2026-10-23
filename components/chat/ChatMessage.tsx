@@ -13,6 +13,7 @@ type ChatMessagesProps = {
   welcomeMessage: string;
   suggestions: string[];
   assistantSettingsLoading: boolean;
+  onFeedback?: (assistant: Message, question: Message, type: "helpful" | "not_helpful" | "report_issue", category?: string) => Promise<void>;
 };
 
 export default function ChatMessages({
@@ -25,6 +26,7 @@ export default function ChatMessages({
   welcomeMessage,
   suggestions,
   assistantSettingsLoading,
+  onFeedback,
 }: ChatMessagesProps) {
   // Determine if this is a "new chat" empty state:
   // single welcome message from assistant
@@ -45,7 +47,7 @@ export default function ChatMessages({
     <section
       ref={messagesContainerRef}
       onScroll={onScroll}
-      className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[var(--background)] px-4 py-7 scrollbar-thin [overflow-anchor:none] sm:px-7 transition-colors duration-150"
+      className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[var(--background)] px-4 py-4 scrollbar-thin [overflow-anchor:none] sm:px-6 sm:py-5 transition-colors duration-150"
     >
       {isNewChat ? (
         <EmptyState
@@ -56,8 +58,8 @@ export default function ChatMessages({
           onSuggestionClick={onSuggestionClick}
         />
       ) : (
-        <div className="mx-auto flex max-w-3xl flex-col gap-4">
-          {messages.map((message) => {
+        <div className="mx-auto flex max-w-3xl flex-col gap-3">
+          {messages.map((message, index) => {
             // Skip rendering the empty placeholder if we're showing the indicator
             if (
               isStreaming &&
@@ -66,7 +68,8 @@ export default function ChatMessages({
             ) {
               return null;
             }
-            return <MessageBubble key={message.id} message={message} />;
+            const priorQuestion = [...messages.slice(0, index)].reverse().find((item) => item.role === "user");
+            return <MessageBubble key={message.id} message={message} question={priorQuestion} onFeedback={loading ? undefined : onFeedback} />;
           })}
 
           {isStreaming && <TypingIndicator />}

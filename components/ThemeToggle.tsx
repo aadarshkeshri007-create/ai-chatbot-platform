@@ -18,7 +18,7 @@ export default function ThemeToggle({ className = "" }: ThemeToggleProps) {
             onClick={toggleTheme}
             aria-label={label}
             title={label}
-            className={`flex h-10 w-10 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-all duration-150 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 active:scale-95 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100 ${className}`}
+            className={`flex h-11 w-11 min-h-[44px] min-w-[44px] sm:h-9 sm:w-9 sm:min-h-0 sm:min-w-0 items-center justify-center rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] transition-colors duration-150 hover:border-[var(--focus)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 active:brightness-95 ${className}`}
         >
             {isDark ? (
                 /* Sun icon */
@@ -32,7 +32,7 @@ export default function ThemeToggle({ className = "" }: ThemeToggleProps) {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     aria-hidden="true"
-                    className="text-amber-400 transition-transform duration-200 hover:rotate-45"
+                    className="text-[var(--warning)] transition-transform duration-200"
                 >
                     <circle cx="12" cy="12" r="5" />
                     <line x1="12" y1="1" x2="12" y2="3" />
@@ -56,7 +56,7 @@ export default function ThemeToggle({ className = "" }: ThemeToggleProps) {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     aria-hidden="true"
-                    className="text-slate-600 transition-transform duration-200 hover:-rotate-12"
+                    className="transition-transform duration-200"
                 >
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
                 </svg>

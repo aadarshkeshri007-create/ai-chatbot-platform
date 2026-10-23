@@ -5,8 +5,10 @@ import {
     useCallback,
     useContext,
     useEffect,
+    useRef,
     useState,
 } from "react";
+import { useServerInsertedHTML } from "next/navigation";
 
 export type Theme = "system" | "light" | "dark";
 
@@ -48,6 +50,8 @@ function applyTheme(resolved: "light" | "dark") {
     }
 }
 
+const themeScript = `(function(){try{var s=localStorage.getItem('supportai-theme');var d=s==='dark'||(s!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d){document.documentElement.classList.add('dark')}else{document.documentElement.classList.remove('dark')}}catch(e){}})();`;
+
 export function ThemeProvider({
     children,
 }: {
@@ -55,12 +59,25 @@ export function ThemeProvider({
 }) {
     const [theme, setThemeState] = useState<Theme>("system");
     const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
+    const isInsertedRef = useRef(false);
+
+    useServerInsertedHTML(() => {
+        if (isInsertedRef.current) return null;
+        isInsertedRef.current = true;
+        return (
+            <script
+                id="supportai-theme-init"
+                dangerouslySetInnerHTML={{ __html: themeScript }}
+            />
+        );
+    });
 
     /* Initialize from localStorage */
     useEffect(() => {
         try {
             const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
             if (stored && ["light", "dark", "system"].includes(stored)) {
+                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setThemeState(stored);
                 const resolved = resolveTheme(stored);
                 setResolvedTheme(resolved);

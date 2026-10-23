@@ -22,19 +22,22 @@ export function normalizeHostname(value: string): string | null {
 }
 
 export function normalizeAllowedDomainInput(value: string): string | null {
-  const trimmed = value.trim().toLowerCase().replace(/\.+$/, "");
-  if (
-    !trimmed ||
-    trimmed.includes("://") ||
-    /[\s/@?#:]/.test(trimmed) ||
-    !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(trimmed) ||
-    trimmed.includes("..")
-  ) {
+  const trimmed = value.trim();
+  if (!trimmed || /\s|\*|%|\\/.test(trimmed) || trimmed.includes("@")) return null;
+
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+  try {
+    const parsed = new URL(candidate);
+    if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+      parsed.username || parsed.password) return null;
+    const hostname = parsed.hostname.toLowerCase().replace(/\.+$/, "");
+    if (!hostname || hostname.includes("..") || !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(hostname)) return null;
+    return hostname;
+  } catch {
     return null;
   }
-
-  const normalized = normalizeHostname(trimmed);
-  return normalized === trimmed ? normalized : null;
 }
 
 export function normalizeOrigin(value: string): {

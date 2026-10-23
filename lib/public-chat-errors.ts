@@ -4,6 +4,8 @@ export type PublicChatStage =
   | "rate-limit"
   | "assistant-lookup"
   | "retrieval"
+  | "conversation-restore"
+  | "conversation-persist"
   | "answer-generation";
 
 const SAFE_ERROR_CODE = /^[A-Z][A-Z0-9_]{0,31}$/;
