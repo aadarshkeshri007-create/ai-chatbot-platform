@@ -10,12 +10,15 @@ async function getOwnerContext(handoffId: string) {
   const supabase = await createClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) return { supabase, user: null, handoff: null };
-  const { data: handoff } = await supabase
+  const { data: handoff, error: handoffError } = await supabase
     .from("handoff_requests")
-    .select("id, assistant_id, customer_name, customer_email, reason, latest_message, transcript, status, created_at, updated_at")
+    .select("id, assistant_id, conversation_id, customer_name, customer_email, reason, latest_message, transcript, status, created_at, updated_at")
     .eq("id", handoffId)
     .eq("owner_user_id", user.id)
     .maybeSingle();
+  if (handoffError) {
+    console.error("[handoffs] handoff-lookup-failed");
+  }
   return { supabase, user, handoff };
 }
 

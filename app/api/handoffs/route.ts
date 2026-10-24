@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const page = Number.isSafeInteger(requestedPage) && requestedPage >= 0 ? Math.min(requestedPage, 10000) : 0;
   let query = supabase
     .from("handoff_requests")
-    .select("id, assistant_id, customer_name, customer_email, reason, latest_message, status, created_at, updated_at, archived_at")
+    .select("id, assistant_id, conversation_id, customer_name, customer_email, reason, latest_message, status, created_at, updated_at, archived_at")
     .eq("owner_user_id", user.id)
     .order("updated_at", { ascending: false })
     .range(page * 100, page * 100 + 100);
@@ -55,13 +55,16 @@ export async function GET(request: Request) {
   const ids = pageHandoffs.map((handoff) => handoff.id);
   let latestHumanMessageAt = new Map<string, string>();
   if (ids.length) {
-    const { data: messages } = await supabase
+    const { data: messages, error: messagesError } = await supabase
       .from("handoff_messages")
       .select("handoff_id, created_at")
       .eq("role", "human")
       .in("handoff_id", ids)
       .order("created_at", { ascending: false })
       .limit(1000);
+    if (messagesError) {
+      console.error("[handoffs] human-messages-lookup-failed");
+    }
     latestHumanMessageAt = new Map();
     for (const message of messages ?? []) {
       if (!latestHumanMessageAt.has(message.handoff_id)) {

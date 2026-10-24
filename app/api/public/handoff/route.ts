@@ -8,7 +8,7 @@ import {
   resolveHandoffLatestMessage,
 } from "@/lib/handoff";
 import { sendHandoffNotification } from "@/lib/handoff-email";
-import { createLeadWebhookPayload, deliverLeadToWebhook } from "@/lib/lead-webhook";
+import { createLeadWebhookPayload, deliverLeadToWebhook, describeLeadWebhookFailure } from "@/lib/lead-webhook";
 import {
   hasDisallowedPublicChatOrigin,
   isAllowedAssistantOrigin,
@@ -212,12 +212,13 @@ export async function POST(request: Request) {
 
     if (insertError) {
       if (idempotencySeed && insertError.code === "23505") {
-        const { data: racedHandoff } = await supabase
+        const { data: racedHandoff, error: racedHandoffError } = await supabase
           .from("handoff_requests")
           .select("id, status")
           .eq("assistant_id", assistantId)
           .eq("public_token_hash", access.hash)
           .maybeSingle();
+        if (racedHandoffError) return genericError(request, 503);
         if (racedHandoff) {
           return publicChatJson(request, {
             success: true,
@@ -251,33 +252,163 @@ export async function POST(request: Request) {
     }
 
     if (customerEmail) {
+      let syncState: "not_needed" | "inserted" | "deduplicated_acknowledged" | "deduplicated_retryable" | "failed" = "not_needed";
+      let targetLeadId: string | null = null;
+      let targetAttempts = 0;
+
       try {
-        await supabase.from("leads").insert({
-          user_id: profile.id,
-          name: customerName,
-          email: customerEmail,
-          message: reason,
-          conversation_id: conversationId,
-        });
-        const webhookUrl = process.env.N8N_WEBHOOK_URL?.trim();
-        if (webhookUrl) {
-          await deliverLeadToWebhook(
-            webhookUrl,
-            createLeadWebhookPayload({
-              name: customerName || "Website visitor",
-              email: customerEmail,
-              question: reason,
-            }),
-          );
+        const recentCutoff = new Date(Date.now() - 60_000).toISOString();
+        let { data: existingLead, error: checkError } = await supabase
+          .from("leads")
+          .select("id, webhook_delivery_status, webhook_attempts")
+          .eq("assistant_id", assistantId)
+          .eq("email", customerEmail)
+          .eq("question", reason)
+          .gte("created_at", recentCutoff)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (isMissingSchemaFieldError(checkError)) {
+          ({ data: existingLead, error: checkError } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("assistant_id", assistantId)
+            .eq("email", customerEmail)
+            .eq("question", reason)
+            .gte("created_at", recentCutoff)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle());
+        }
+
+        if (checkError) {
+          console.error("[public-handoff]", { stage: "lead-sync-check", code: "LEAD_DEDUPLICATION_CHECK_FAILED" });
+          syncState = "failed";
+        } else if (existingLead) {
+          targetLeadId = existingLead.id;
+          const typedExisting = existingLead as { id: string; webhook_delivery_status?: string; webhook_attempts?: number };
+          targetAttempts = typedExisting.webhook_attempts ?? 0;
+          const status = typedExisting.webhook_delivery_status;
+
+          if (status === "acknowledged") {
+            syncState = "deduplicated_acknowledged";
+          } else if (status === "uncertain") {
+            console.warn("[public-handoff]", { stage: "lead-sync", code: "PREVIOUS_DELIVERY_UNCERTAIN" });
+            syncState = "deduplicated_acknowledged";
+          } else if (status === "failed") {
+            syncState = targetAttempts < 3 ? "deduplicated_retryable" : "deduplicated_acknowledged";
+          } else {
+            syncState = "deduplicated_acknowledged";
+          }
+        } else {
+          const insertPayload: Record<string, unknown> = {
+            assistant_id: assistantId,
+            name: customerName || "Website visitor",
+            email: customerEmail,
+            question: reason,
+            webhook_delivery_status: "pending",
+            webhook_attempts: 0,
+          };
+          if (requestId) {
+            insertPayload.request_id = requestId;
+          }
+
+          let { data: newLead, error: insertError } = await supabase
+            .from("leads")
+            .insert(insertPayload)
+            .select("id")
+            .single();
+
+          if (isMissingSchemaFieldError(insertError)) {
+            ({ data: newLead, error: insertError } = await supabase
+              .from("leads")
+              .insert({
+                assistant_id: assistantId,
+                name: customerName || "Website visitor",
+                email: customerEmail,
+                question: reason,
+              })
+              .select("id")
+              .single());
+          }
+
+          if (insertError || !newLead) {
+            console.error("[public-handoff]", { stage: "lead-sync-insert", code: "LEAD_SYNC_INSERT_FAILED" });
+            syncState = "failed";
+          } else {
+            targetLeadId = newLead.id;
+            syncState = "inserted";
+          }
         }
       } catch {
-        // Best-effort lead record sync; handoff request is already persisted.
+        console.error("[public-handoff]", { stage: "lead-sync", code: "LEAD_SYNC_FAILED" });
+        syncState = "failed";
+      }
+
+      if (syncState === "inserted" || syncState === "deduplicated_retryable") {
+        try {
+          const webhookUrl = process.env.N8N_WEBHOOK_URL?.trim();
+          const webhookSecret = process.env.N8N_WEBHOOK_SECRET?.trim();
+          if (webhookUrl && webhookSecret) {
+            const deliveryResult = await deliverLeadToWebhook(
+              webhookUrl,
+              createLeadWebhookPayload({
+                name: customerName || "Website visitor",
+                email: customerEmail,
+                question: reason,
+              }),
+              webhookSecret,
+            );
+
+            if (deliveryResult.ok) {
+              if (targetLeadId) {
+                try {
+                  await supabase.from("leads").update({
+                    webhook_delivery_status: "acknowledged",
+                    webhook_acknowledged_at: new Date().toISOString(),
+                    webhook_attempts: targetAttempts + 1,
+                    webhook_last_error: null,
+                  }).eq("id", targetLeadId);
+                } catch {
+                  // Ignore schema mismatch
+                }
+              }
+            } else {
+              const failure = describeLeadWebhookFailure(deliveryResult);
+              const isTimeout = deliveryResult.reason === "timeout";
+              if (targetLeadId) {
+                try {
+                  await supabase.from("leads").update({
+                    webhook_delivery_status: isTimeout ? "uncertain" : "failed",
+                    webhook_attempts: targetAttempts + 1,
+                    webhook_last_error: failure.code,
+                  }).eq("id", targetLeadId);
+                } catch {
+                  // Ignore schema mismatch
+                }
+              }
+              console.error("[public-handoff]", {
+                stage: "lead-webhook",
+                code: failure.code,
+                ...(failure.upstreamStatus ? { status: failure.upstreamStatus } : {}),
+              });
+            }
+          } else {
+            console.warn("[public-handoff]", { stage: "lead-webhook", code: "N8N_WEBHOOK_NOT_CONFIGURED" });
+          }
+        } catch {
+          console.error("[public-handoff]", { stage: "lead-webhook", code: "LEAD_WEBHOOK_DISPATCH_FAILED" });
+        }
       }
     }
 
     try {
-      const { data: owner } = await supabase.auth.admin.getUserById(profile.id);
-      const ownerEmail = owner.user?.email;
+      const { data: owner, error: ownerError } = await supabase.auth.admin.getUserById(profile.id);
+      if (ownerError) {
+        console.warn("[public-handoff] owner-lookup-failed");
+      }
+      const ownerEmail = owner?.user?.email;
       if (ownerEmail) {
         await sendHandoffNotification({
           ownerEmail,
@@ -319,29 +450,41 @@ export async function GET(request: Request) {
 
   try {
     const supabase = createAdminClient();
-    const { data: handoff } = await supabase
+    const { data: handoff, error: handoffError } = await supabase
       .from("handoff_requests")
       .select("id, assistant_id, status, public_token_hash")
       .eq("id", handoffId)
       .eq("public_token_hash", createHandoffTokenHash(token))
       .maybeSingle();
+    if (handoffError) {
+      console.error("[public-handoff] handoff-lookup-failed");
+      return genericError(request, 503);
+    }
     if (!handoff) return genericError(request, 404);
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileLookupError } = await supabase
       .from("profiles")
       .select("allowed_domains")
       .eq("assistant_id", handoff.assistant_id)
       .maybeSingle();
+    if (profileLookupError) {
+      console.error("[public-handoff] profile-lookup-failed");
+      return genericError(request, 503);
+    }
     if (!profile || !isAllowedAssistantOrigin(request, profile.allowed_domains)) {
       return publicChatJson(request, { error: "This assistant is not available from this website." }, { status: 403 }, profile?.allowed_domains);
     }
 
-    const { data: messages } = await supabase
+    const { data: messages, error: messagesError } = await supabase
       .from("handoff_messages")
       .select("id, role, content, created_at")
       .eq("handoff_id", handoff.id)
       .eq("role", "human")
       .order("created_at", { ascending: true });
+    if (messagesError) {
+      console.error("[public-handoff] messages-lookup-failed");
+      return genericError(request, 503);
+    }
 
     return publicChatJson(request, {
       status: handoff.status,

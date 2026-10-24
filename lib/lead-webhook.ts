@@ -32,7 +32,7 @@ export function parseLeadInput(value: unknown): LeadInput | null {
   }
 
   const name = input.name.trim();
-  const email = input.email.trim();
+  const email = input.email.trim().toLowerCase();
   const question = input.question.trim();
   if (!name || name.length > 120 || !EMAIL_PATTERN.test(email) || email.length > 254 || !question || question.length > 5000) {
     return null;
@@ -43,22 +43,46 @@ export function parseLeadInput(value: unknown): LeadInput | null {
 export function createLeadWebhookPayload(lead: LeadInput, now = new Date()): LeadWebhookPayload {
   return {
     name: lead.name,
-    email: lead.email,
+    email: lead.email.toLowerCase(),
     question: lead.question,
     timestamp: now.toISOString(),
   };
 }
 
+export const WEBHOOK_SECRET_HEADER = "X-SupportAI-Webhook-Secret";
+
 export async function deliverLeadToWebhook(
   webhookUrl: string | undefined,
   payload: LeadWebhookPayload,
-  fetcher: typeof fetch = fetch,
+  webhookSecret?: string | undefined,
+  fetcher?: typeof fetch,
+): Promise<LeadDeliveryResult>;
+export async function deliverLeadToWebhook(
+  webhookUrl: string | undefined,
+  payload: LeadWebhookPayload,
+  fetcher?: typeof fetch,
+): Promise<LeadDeliveryResult>;
+export async function deliverLeadToWebhook(
+  webhookUrl: string | undefined,
+  payload: LeadWebhookPayload,
+  secretOrFetcher?: string | typeof fetch,
+  optionalFetcher?: typeof fetch,
 ): Promise<LeadDeliveryResult> {
-  if (!webhookUrl?.trim()) return { ok: false, reason: "missing_configuration" };
+  const secret = typeof secretOrFetcher === "string"
+    ? secretOrFetcher
+    : process.env.N8N_WEBHOOK_SECRET;
+  const fetcher = typeof secretOrFetcher === "function"
+    ? secretOrFetcher
+    : (optionalFetcher ?? fetch);
+
+  if (!webhookUrl?.trim() || !secret?.trim()) {
+    return { ok: false, reason: "missing_configuration" };
+  }
   let parsedUrl: URL;
   try {
-    parsedUrl = new URL(webhookUrl);
-    if (parsedUrl.protocol !== "https:") return { ok: false, reason: "invalid_configuration" };
+    parsedUrl = new URL(webhookUrl.trim());
+    const isLocalDev = process.env.NODE_ENV !== "production" && parsedUrl.protocol === "http:" && (parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1");
+    if (parsedUrl.protocol !== "https:" && !isLocalDev) return { ok: false, reason: "invalid_configuration" };
   } catch {
     return { ok: false, reason: "invalid_configuration" };
   }
@@ -66,7 +90,10 @@ export async function deliverLeadToWebhook(
   try {
     const response = await fetcher(parsedUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        [WEBHOOK_SECRET_HEADER]: secret.trim(),
+      },
       body: JSON.stringify(payload),
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),
