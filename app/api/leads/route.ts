@@ -152,13 +152,19 @@ export async function POST(request: Request) {
             process.env.N8N_WEBHOOK_SECRET,
           );
           if (retryResult.ok) {
+            let statusPersisted = false;
             try {
-              await admin.from("leads").update({
+              const { error: updateError } = await admin.from("leads").update({
                 webhook_delivery_status: "acknowledged",
                 webhook_acknowledged_at: new Date().toISOString(),
                 webhook_attempts: attempts + 1,
                 webhook_last_error: null,
               }).eq("id", typedLead.id);
+              if (updateError && !isMissingSchemaFieldError(updateError)) {
+                console.error("[lead-webhook]", { stage: "status-update", code: "LEAD_STATUS_UPDATE_FAILED" });
+              } else {
+                statusPersisted = !updateError;
+              }
             } catch {
               // Ignore schema mismatch
             }
@@ -168,17 +174,24 @@ export async function POST(request: Request) {
               lead_id: typedLead.id,
               deduplicated: true,
               delivered: true,
+              ...(!statusPersisted ? { delivery_status_persisted: false } : {}),
             }, undefined, profile.allowed_domains);
           }
 
           const failure = describeLeadWebhookFailure(retryResult);
           const isTimeout = retryResult.reason === "timeout";
+          let statusPersisted = false;
           try {
-            await admin.from("leads").update({
+            const { error: updateError } = await admin.from("leads").update({
               webhook_delivery_status: isTimeout ? "uncertain" : "failed",
               webhook_attempts: attempts + 1,
               webhook_last_error: failure.code,
             }).eq("id", typedLead.id);
+            if (updateError && !isMissingSchemaFieldError(updateError)) {
+              console.error("[lead-webhook]", { stage: "status-update", code: "LEAD_STATUS_UPDATE_FAILED" });
+            } else {
+              statusPersisted = !updateError;
+            }
           } catch {
             // Ignore schema mismatch
           }
@@ -190,6 +203,7 @@ export async function POST(request: Request) {
             delivered: false,
             delivery_code: failure.code,
             ...(isTimeout ? { uncertain: true } : {}),
+            ...(!statusPersisted ? { delivery_status_persisted: false } : {}),
           }, undefined, profile.allowed_domains);
         }
 
@@ -245,23 +259,79 @@ export async function POST(request: Request) {
 
     if (insertError) {
       if (insertError.code === "23505") {
-        const { data: racedLead, error: racedError } = await admin
-          .from("leads")
-          .select("id, created_at")
-          .eq("assistant_id", assistantId)
-          .eq("email", lead.email)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        if (typeof record.request_id === "string") {
+          let { data: racedLead, error: racedError } = await admin
+            .from("leads")
+            .select("id, created_at, webhook_delivery_status, webhook_attempts, webhook_last_error")
+            .eq("assistant_id", assistantId)
+            .eq("request_id", record.request_id)
+            .maybeSingle();
 
-        if (!racedError && racedLead) {
-          return publicChatJson(request, {
-            success: true,
-            message: "Lead submitted successfully",
-            lead_id: racedLead.id,
-            deduplicated: true,
-          }, undefined, profile.allowed_domains);
+          if (isMissingSchemaFieldError(racedError)) {
+            ({ data: racedLead, error: racedError } = await admin
+              .from("leads")
+              .select("id, created_at")
+              .eq("assistant_id", assistantId)
+              .eq("request_id", record.request_id)
+              .maybeSingle());
+          }
+
+          if (!racedError && racedLead) {
+            const typedRacedLead = racedLead as {
+              id: string;
+              created_at: string;
+              webhook_delivery_status?: string;
+              webhook_attempts?: number;
+              webhook_last_error?: string | null;
+            };
+
+            if (typedRacedLead.webhook_delivery_status === "acknowledged") {
+              return publicChatJson(request, {
+                success: true,
+                message: "Lead submitted successfully",
+                lead_id: typedRacedLead.id,
+                deduplicated: true,
+                delivered: true,
+              }, undefined, profile.allowed_domains);
+            }
+
+            if (typedRacedLead.webhook_delivery_status === "uncertain") {
+              return publicChatJson(request, {
+                success: true,
+                message: "Lead submitted successfully",
+                lead_id: typedRacedLead.id,
+                deduplicated: true,
+                delivered: false,
+                delivery_code: "N8N_DELIVERY_UNCERTAIN",
+                uncertain: true,
+              }, undefined, profile.allowed_domains);
+            }
+
+            if (typedRacedLead.webhook_delivery_status === "failed") {
+              return publicChatJson(request, {
+                success: true,
+                message: "Lead submitted successfully",
+                lead_id: typedRacedLead.id,
+                deduplicated: true,
+                delivered: false,
+                delivery_code: typedRacedLead.webhook_last_error || "LEAD_DELIVERY_FAILED",
+              }, undefined, profile.allowed_domains);
+            }
+
+            return publicChatJson(request, {
+              success: true,
+              message: "Lead submitted successfully",
+              lead_id: typedRacedLead.id,
+              deduplicated: true,
+            }, undefined, profile.allowed_domains);
+          }
         }
+
+        console.error("[lead-intake]", { stage: "persistence-collision", code: "LEAD_PERSISTENCE_COLLISION_UNRESOLVED" });
+        return publicChatJson(request, {
+          success: false,
+          message: "Lead submission is temporarily unavailable. Please try again.",
+        }, { status: 503 }, profile.allowed_domains);
       }
 
       console.error("[lead-intake]", { stage: "persistence", code: "LEAD_PERSISTENCE_FAILED" });
@@ -312,12 +382,18 @@ export async function POST(request: Request) {
     if (!result.ok) {
       const failure = describeLeadWebhookFailure(result);
       const isTimeout = result.reason === "timeout";
+      let statusPersisted = false;
       try {
-        await admin.from("leads").update({
+        const { error: updateError } = await admin.from("leads").update({
           webhook_delivery_status: isTimeout ? "uncertain" : "failed",
           webhook_attempts: 1,
           webhook_last_error: failure.code,
         }).eq("id", savedLead.id);
+        if (updateError && !isMissingSchemaFieldError(updateError)) {
+          console.error("[lead-webhook]", { stage: "status-update", code: "LEAD_STATUS_UPDATE_FAILED" });
+        } else {
+          statusPersisted = !updateError;
+        }
       } catch {
         // Ignore schema mismatch
       }
@@ -336,16 +412,23 @@ export async function POST(request: Request) {
         delivered: false,
         delivery_code: failure.code,
         ...(isTimeout ? { uncertain: true } : {}),
+        ...(!statusPersisted ? { delivery_status_persisted: false } : {}),
       }, undefined, profile.allowed_domains);
     }
 
+    let statusPersisted = false;
     try {
-      await admin.from("leads").update({
+      const { error: updateError } = await admin.from("leads").update({
         webhook_delivery_status: "acknowledged",
         webhook_acknowledged_at: new Date().toISOString(),
         webhook_attempts: 1,
         webhook_last_error: null,
       }).eq("id", savedLead.id);
+      if (updateError && !isMissingSchemaFieldError(updateError)) {
+        console.error("[lead-webhook]", { stage: "status-update", code: "LEAD_STATUS_UPDATE_FAILED" });
+      } else {
+        statusPersisted = !updateError;
+      }
     } catch {
       // Ignore schema mismatch
     }
@@ -355,6 +438,7 @@ export async function POST(request: Request) {
       message: "Lead submitted successfully",
       lead_id: savedLead.id,
       delivered: true,
+      ...(!statusPersisted ? { delivery_status_persisted: false } : {}),
     }, undefined, profile.allowed_domains);
   } catch {
     console.error("[lead-webhook]", { stage: "request", code: "LEAD_REQUEST_FAILED" });
