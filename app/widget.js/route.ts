@@ -312,6 +312,7 @@ const widgetScript = `(() => {
               : isLead
                 ? JSON.stringify({
                     assistant_id: assistantId,
+                    ...(typeof data.requestId === "string" && data.requestId ? { request_id: data.requestId } : {}),
                     name: data.name.trim(),
                     email: data.email.trim(),
                     question: data.question.trim(),

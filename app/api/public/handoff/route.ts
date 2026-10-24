@@ -333,7 +333,41 @@ export async function POST(request: Request) {
               .single());
           }
 
-          if (insertError || !newLead) {
+          if (insertError?.code === "23505") {
+            if (requestId) {
+              let { data: racedLead, error: racedError } = await supabase
+                .from("leads")
+                .select("id, webhook_delivery_status, webhook_attempts")
+                .eq("assistant_id", assistantId)
+                .eq("request_id", requestId)
+                .maybeSingle();
+
+              if (isMissingSchemaFieldError(racedError)) {
+                ({ data: racedLead, error: racedError } = await supabase
+                  .from("leads")
+                  .select("id")
+                  .eq("assistant_id", assistantId)
+                  .eq("request_id", requestId)
+                  .maybeSingle());
+              }
+
+              if (!racedError && racedLead) {
+                targetLeadId = racedLead.id;
+                const typedRaced = racedLead as { id: string; webhook_delivery_status?: string; webhook_attempts?: number };
+                targetAttempts = typedRaced.webhook_attempts ?? 0;
+                if (typedRaced.webhook_delivery_status === "uncertain") {
+                  console.warn("[public-handoff]", { stage: "lead-sync", code: "PREVIOUS_DELIVERY_UNCERTAIN" });
+                }
+                syncState = "deduplicated_acknowledged";
+              } else {
+                console.error("[public-handoff]", { stage: "lead-sync-collision", code: "LEAD_SYNC_COLLISION_UNRESOLVED" });
+                syncState = "failed";
+              }
+            } else {
+              console.error("[public-handoff]", { stage: "lead-sync-collision", code: "LEAD_SYNC_COLLISION_UNRESOLVED" });
+              syncState = "failed";
+            }
+          } else if (insertError || !newLead) {
             console.error("[public-handoff]", { stage: "lead-sync-insert", code: "LEAD_SYNC_INSERT_FAILED" });
             syncState = "failed";
           } else {
@@ -364,12 +398,15 @@ export async function POST(request: Request) {
             if (deliveryResult.ok) {
               if (targetLeadId) {
                 try {
-                  await supabase.from("leads").update({
+                  const { error: updateError } = await supabase.from("leads").update({
                     webhook_delivery_status: "acknowledged",
                     webhook_acknowledged_at: new Date().toISOString(),
                     webhook_attempts: targetAttempts + 1,
                     webhook_last_error: null,
                   }).eq("id", targetLeadId);
+                  if (updateError && !isMissingSchemaFieldError(updateError)) {
+                    console.error("[public-handoff]", { stage: "lead-status-update", code: "LEAD_STATUS_UPDATE_FAILED" });
+                  }
                 } catch {
                   // Ignore schema mismatch
                 }
@@ -379,11 +416,14 @@ export async function POST(request: Request) {
               const isTimeout = deliveryResult.reason === "timeout";
               if (targetLeadId) {
                 try {
-                  await supabase.from("leads").update({
+                  const { error: updateError } = await supabase.from("leads").update({
                     webhook_delivery_status: isTimeout ? "uncertain" : "failed",
                     webhook_attempts: targetAttempts + 1,
                     webhook_last_error: failure.code,
                   }).eq("id", targetLeadId);
+                  if (updateError && !isMissingSchemaFieldError(updateError)) {
+                    console.error("[public-handoff]", { stage: "lead-status-update", code: "LEAD_STATUS_UPDATE_FAILED" });
+                  }
                 } catch {
                   // Ignore schema mismatch
                 }

@@ -247,3 +247,309 @@ test("Speed-to-Lead: additive database migration defines delivery tracking and i
   assert.match(migration, /create index if not exists leads_dedup_idx/i);
   assert.match(migration, /create unique index if not exists leads_assistant_request_id_idx/i);
 });
+
+test("Speed-to-Lead: direct widget lead request ID carries data.requestId and preserves retry stability", async () => {
+  const widgetScript = await read("../app/widget.js/route.ts");
+  const widgetFrame = await read("../app/widget-frame/page.tsx");
+  const leadsRoute = await read("../app/api/leads/route.ts");
+
+  // widget.js passes request_id when present
+  assert.match(widgetScript, /request_id:\s*data\.requestId/);
+  // widget.js preserves compatibility if data.requestId is omitted
+  assert.match(widgetScript, /typeof data\.requestId === "string"/);
+  // widget.js manages in-flight tracking with pendingRequests
+  assert.match(widgetScript, /pendingRequests\.add\(requestId\)/);
+  assert.match(widgetScript, /pendingRequests\.delete\(requestId\)/);
+
+  // widget-frame generates requestId once per logical submission and reuses it across retries
+  assert.match(widgetFrame, /contactRequestIdRef\.current\s*\?\?\s*crypto\.randomUUID\(\)/);
+  assert.match(widgetFrame, /contactRequestIdRef\.current\s*=\s*requestId/);
+  // widget-frame clears contactRequestIdRef only on success
+  assert.match(widgetFrame, /contactRequestIdRef\.current\s*=\s*null/);
+
+  // /api/leads permits requests that omit request_id (backward compatibility)
+  assert.match(leadsRoute, /record\.request_id\s*!==\s*undefined\s*&&\s*record\.request_id\s*!==\s*null/);
+  assert.match(leadsRoute, /typeof record\.request_id === "string"/);
+});
+
+test("Speed-to-Lead: duplicate-lead regression: timeout retries, concurrency races, and collision recovery", async () => {
+  const leadsRoute = await read("../app/api/leads/route.ts");
+  const handoffRoute = await read("../app/api/public/handoff/route.ts");
+
+  // In /api/leads: 23505 collision recovery uses exact (assistant_id, request_id)
+  assert.match(leadsRoute, /insertError\.code\s*===\s*"23505"/);
+  assert.match(leadsRoute, /\.eq\("assistant_id",\s*assistantId\)\s*\.eq\("request_id",\s*record\.request_id\)/);
+
+  // In /api/leads: 23505 collision recovery does NOT match on email
+  assert.doesNotMatch(
+    leadsRoute,
+    /insertError\.code\s*===\s*"23505"[\s\S]*?\.eq\("email",\s*lead\.email\)/,
+  );
+
+  // In /api/leads: collision resolution failure logs safe diagnostic and returns 503 rather than guessing
+  assert.match(leadsRoute, /LEAD_PERSISTENCE_COLLISION_UNRESOLVED/);
+
+  // In /api/leads: 23505 collision respects existing delivery status without second webhook dispatch
+  assert.match(leadsRoute, /typedRacedLead\.webhook_delivery_status\s*===\s*"acknowledged"/);
+  assert.match(leadsRoute, /typedRacedLead\.webhook_delivery_status\s*===\s*"uncertain"/);
+  assert.match(leadsRoute, /typedRacedLead\.webhook_delivery_status\s*===\s*"failed"/);
+
+  // In /api/public/handoff: 23505 collision recovery on lead sync uses exact (assistant_id, request_id)
+  assert.match(handoffRoute, /insertError\?\.code\s*===\s*"23505"/);
+  assert.match(handoffRoute, /\.eq\("assistant_id",\s*assistantId\)\s*\.eq\("request_id",\s*requestId\)/);
+  assert.match(handoffRoute, /targetLeadId\s*=\s*racedLead\.id/);
+  assert.match(handoffRoute, /syncState\s*=\s*"deduplicated_acknowledged"/);
+  assert.match(handoffRoute, /LEAD_SYNC_COLLISION_UNRESOLVED/);
+});
+
+test("Speed-to-Lead: delivery status mutation error handling in both routes", async () => {
+  const leadsRoute = await read("../app/api/leads/route.ts");
+  const handoffRoute = await read("../app/api/public/handoff/route.ts");
+
+  // In /api/leads: all updates check updateError and log LEAD_STATUS_UPDATE_FAILED
+  const leadsStatusUpdates = (leadsRoute.match(/LEAD_STATUS_UPDATE_FAILED/g) || []).length;
+  assert.ok(leadsStatusUpdates >= 4, `Expected at least 4 LEAD_STATUS_UPDATE_FAILED logs in leads route, found ${leadsStatusUpdates}`);
+  assert.match(leadsRoute, /const\s*\{\s*error:\s*updateError\s*\}\s*=\s*await\s*admin\.from\("leads"\)\.update/);
+  assert.match(leadsRoute, /delivery_status_persisted:\s*false/);
+
+  // In /api/public/handoff: all updates check updateError and log LEAD_STATUS_UPDATE_FAILED
+  const handoffStatusUpdates = (handoffRoute.match(/LEAD_STATUS_UPDATE_FAILED/g) || []).length;
+  assert.ok(handoffStatusUpdates >= 2, `Expected at least 2 LEAD_STATUS_UPDATE_FAILED logs in handoff route, found ${handoffStatusUpdates}`);
+  assert.match(handoffRoute, /const\s*\{\s*error:\s*updateError\s*\}\s*=\s*await\s*supabase\.from\("leads"\)\.update/);
+
+  // Never log customer secrets, emails, or questions in status update error logs
+  const leadsLogMatches = leadsRoute.match(/console\.error\("[^"]*",\s*\{\s*stage:\s*"status-update"[\s\S]*?\}\);/g) ?? [];
+  assert.ok(leadsLogMatches.length >= 4);
+  for (const log of leadsLogMatches) {
+    assert.doesNotMatch(log, /email|question|secret|token/i);
+  }
+
+  const handoffLogMatches = handoffRoute.match(/console\.error\("[^"]*",\s*\{\s*stage:\s*"lead-status-update"[\s\S]*?\}\);/g) ?? [];
+  assert.ok(handoffLogMatches.length >= 2);
+  for (const log of handoffLogMatches) {
+    assert.doesNotMatch(log, /email|reason|secret|token/i);
+  }
+});
+
+test("Speed-to-Lead: behavioral simulation for retry after timeout, concurrent race, distinct requests, collision recovery, and delivery mutation failures", async () => {
+  type LeadRow = {
+    id: string;
+    assistant_id: string;
+    request_id?: string;
+    email: string;
+    question: string;
+    created_at: string;
+    webhook_delivery_status: "pending" | "acknowledged" | "failed" | "uncertain";
+    webhook_attempts: number;
+    webhook_last_error?: string | null;
+  };
+
+  class MockLeadsStore {
+    leads: LeadRow[] = [];
+    failNextUpdate = false;
+    webhookDispatches: { leadId: string; timestamp: string }[] = [];
+
+    async insert(row: Omit<LeadRow, "id" | "created_at">): Promise<{ data: LeadRow | null; error: { code: string; message: string } | null }> {
+      if (row.request_id && this.leads.some((l) => l.assistant_id === row.assistant_id && l.request_id === row.request_id)) {
+        return { data: null, error: { code: "23505", message: "unique_violation" } };
+      }
+      const created: LeadRow = {
+        ...row,
+        id: `lead_${this.leads.length + 1}`,
+        created_at: new Date().toISOString(),
+      };
+      this.leads.push(created);
+      return { data: created, error: null };
+    }
+
+    async findByAssistantAndRequestId(assistantId: string, requestId: string): Promise<LeadRow | null> {
+      return this.leads.find((l) => l.assistant_id === assistantId && l.request_id === requestId) ?? null;
+    }
+
+    async updateStatus(id: string, update: Partial<LeadRow>): Promise<{ error: { code: string; message: string } | null }> {
+      if (this.failNextUpdate) {
+        return { error: { code: "XX000", message: "disk I/O error" } };
+      }
+      const target = this.leads.find((l) => l.id === id);
+      if (target) {
+        Object.assign(target, update);
+      }
+      return { error: null };
+    }
+
+    async dispatchWebhook(leadId: string): Promise<{ ok: boolean }> {
+      this.webhookDispatches.push({ leadId, timestamp: new Date().toISOString() });
+      return { ok: true };
+    }
+  }
+
+  type SimulatedLeadResult = {
+    success: boolean;
+    lead_id?: string;
+    delivered?: boolean;
+    deduplicated?: boolean;
+    delivery_status_persisted?: boolean;
+    uncertain?: boolean;
+    delivery_code?: string;
+    status?: number;
+    message?: string;
+  };
+
+  async function simulateLeadSubmission(
+    store: MockLeadsStore,
+    payload: { assistant_id: string; request_id?: string; email: string; name: string; question: string }
+  ): Promise<SimulatedLeadResult> {
+    const insertRes = await store.insert({
+      assistant_id: payload.assistant_id,
+      request_id: payload.request_id,
+      email: payload.email,
+      question: payload.question,
+      webhook_delivery_status: "pending",
+      webhook_attempts: 0,
+    });
+
+    let lead: LeadRow | null = insertRes.data;
+    let isDeduplicated = false;
+
+    if (insertRes.error?.code === "23505") {
+      if (typeof payload.request_id === "string") {
+        lead = await store.findByAssistantAndRequestId(payload.assistant_id, payload.request_id);
+        if (lead) {
+          isDeduplicated = true;
+          if (lead.webhook_delivery_status === "acknowledged") {
+            return { success: true, lead_id: lead.id, deduplicated: true, delivered: true };
+          }
+          if (lead.webhook_delivery_status === "uncertain") {
+            return { success: true, lead_id: lead.id, deduplicated: true, delivered: false, uncertain: true };
+          }
+          if (lead.webhook_delivery_status === "failed") {
+            return { success: true, lead_id: lead.id, deduplicated: true, delivered: false, delivery_code: lead.webhook_last_error ?? "LEAD_DELIVERY_FAILED" };
+          }
+          return { success: true, lead_id: lead.id, deduplicated: true };
+        }
+      }
+      return { success: false, status: 503, message: "LEAD_PERSISTENCE_COLLISION_UNRESOLVED" };
+    }
+
+    if (!lead) return { success: false, status: 503, message: "LEAD_PERSISTENCE_FAILED" };
+
+    const deliveryRes = await store.dispatchWebhook(lead.id);
+    let statusPersisted = false;
+    if (deliveryRes.ok) {
+      const updateRes = await store.updateStatus(lead.id, {
+        webhook_delivery_status: "acknowledged",
+        webhook_attempts: lead.webhook_attempts + 1,
+      });
+      statusPersisted = !updateRes.error;
+    }
+
+    return {
+      success: true,
+      lead_id: lead.id,
+      delivered: deliveryRes.ok,
+      deduplicated: isDeduplicated,
+      ...(!statusPersisted ? { delivery_status_persisted: false } : {}),
+    };
+  }
+
+  const store = new MockLeadsStore();
+  const assistantId = "11111111-1111-4111-8111-111111111111";
+  const requestId1 = "aaaa1111-2222-4333-8444-555555555555";
+
+  // Scenario 1: First request times out after insert, retried with same request ID
+  const firstAttempt = await simulateLeadSubmission(store, {
+    assistant_id: assistantId,
+    request_id: requestId1,
+    email: "sarah@example.com",
+    name: "Sarah",
+    question: "Do you offer enterprise SSO?",
+  });
+  assert.equal(firstAttempt.success, true);
+  assert.equal(firstAttempt.delivered, true);
+  assert.equal(firstAttempt.deduplicated, false);
+  assert.equal(store.webhookDispatches.length, 1);
+
+  // Retried after a timeout with the same request ID
+  const retriedAttempt = await simulateLeadSubmission(store, {
+    assistant_id: assistantId,
+    request_id: requestId1,
+    email: "sarah@example.com",
+    name: "Sarah",
+    question: "Do you offer enterprise SSO?",
+  });
+  assert.equal(retriedAttempt.success, true);
+  assert.equal(retriedAttempt.lead_id, firstAttempt.lead_id);
+  assert.equal(retriedAttempt.deduplicated, true);
+  assert.equal(retriedAttempt.delivered, true);
+  assert.equal(store.webhookDispatches.length, 1, "Must NOT dispatch a second webhook after acknowledged delivery");
+
+  // Scenario 2: Two concurrent requests racing with the same request ID
+  const raceStore = new MockLeadsStore();
+  const raceRequestId = "bbbb2222-3333-4444-8555-666666666666";
+  const [race1, race2] = await Promise.all([
+    simulateLeadSubmission(raceStore, {
+      assistant_id: assistantId,
+      request_id: raceRequestId,
+      email: "alex@example.com",
+      name: "Alex",
+      question: "Pricing info",
+    }),
+    simulateLeadSubmission(raceStore, {
+      assistant_id: assistantId,
+      request_id: raceRequestId,
+      email: "alex@example.com",
+      name: "Alex",
+      question: "Pricing info",
+    }),
+  ]);
+  assert.equal(race1.success, true);
+  assert.equal(race2.success, true);
+  assert.equal(race1.lead_id, race2.lead_id, "Both racing requests resolve to the exact same lead record");
+  assert.equal(raceStore.leads.length, 1, "Only one record inserted in PostgreSQL");
+  assert.equal(raceStore.webhookDispatches.length, 1, "Only one webhook dispatched despite race");
+
+  // Scenario 3: Different request IDs for intentional new submissions
+  const requestId2 = "cccc3333-4444-4555-8666-777777777777";
+  const secondSubmission = await simulateLeadSubmission(store, {
+    assistant_id: assistantId,
+    request_id: requestId2,
+    email: "sarah@example.com",
+    name: "Sarah",
+    question: "Do you offer custom integrations?",
+  });
+  assert.equal(secondSubmission.success, true);
+  assert.notEqual(secondSubmission.lead_id, firstAttempt.lead_id, "New request ID creates distinct lead");
+  assert.equal(secondSubmission.deduplicated, false);
+  assert.equal(store.webhookDispatches.length, 2, "Distinct submission receives its own webhook dispatch");
+
+  // Scenario 4: Supabase delivery-status update failure
+  const updateFailStore = new MockLeadsStore();
+  updateFailStore.failNextUpdate = true;
+  const requestId3 = "dddd4444-5555-4666-8777-888888888888";
+  const failUpdateRes = await simulateLeadSubmission(updateFailStore, {
+    assistant_id: assistantId,
+    request_id: requestId3,
+    email: "taylor@example.com",
+    name: "Taylor",
+    question: "SLA details",
+  });
+  assert.equal(failUpdateRes.success, true, "Preserves user-facing response contract");
+  assert.equal(failUpdateRes.delivered, true, "Webhook was delivered");
+  assert.equal(failUpdateRes.delivery_status_persisted, false, "Does NOT falsely claim status was persisted");
+
+  // Scenario 5: Missing request ID collision safety
+  const storeCollisionNoReqId = new MockLeadsStore();
+  storeCollisionNoReqId.insert = async () => ({
+    data: null,
+    error: { code: "23505", message: "unique_violation" },
+  });
+  const unresolvable = await simulateLeadSubmission(storeCollisionNoReqId, {
+    assistant_id: assistantId,
+    email: "someone@example.com",
+    name: "Someone",
+    question: "Help",
+  });
+  assert.equal(unresolvable.success, false);
+  assert.equal(unresolvable.status, 503);
+  assert.equal(unresolvable.message, "LEAD_PERSISTENCE_COLLISION_UNRESOLVED");
+});
