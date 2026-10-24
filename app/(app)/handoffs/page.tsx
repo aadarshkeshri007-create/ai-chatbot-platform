@@ -9,6 +9,7 @@ import { isValidHandoffStatus } from "@/lib/handoff-resolution";
 
 type Handoff = {
   id: string;
+  conversation_id?: string | null;
   customer_name: string | null;
   customer_email: string | null;
   reason: string;
@@ -292,8 +293,7 @@ export default function HandoffsPage() {
           <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
             <section aria-label="Support requests" className={`${selected ? "hidden lg:block" : ""} min-w-0 space-y-2`}>
               {handoffs.length === 0 && error && <button type="button" onClick={() => void load(true)} className="surface w-full rounded-xl border-dashed p-8 text-left text-sm text-[var(--text-secondary)]">Could not load the inbox. Retry.</button>}
-              {handoffs.length === 0 && !error && <p className="surface rounded-xl border-dashed p-8 text-sm text-[var(--text-secondary)]">{view === "active" ? "No active support requests." : view === "resolved" ? "No resolved support requests." : "No archived support requests."}</p>}
-              {handoffs.map((handoff) => (
+              {handoffs.length === 0 && !error && <p className="surface rounded-xl border-dashed p-8 text-sm text-[var(--text-secondary)]">{view === "active" ? "No active support requests." : view === "resolved" ? "No resolved support requests." : "No archived support requests."}</p>}              {handoffs.map((handoff) => (
                 <button key={handoff.id} type="button" onClick={() => void select(handoff)}
                   aria-pressed={selected?.id === handoff.id}
                   className={`surface w-full rounded-lg p-3 text-left transition-colors hover:border-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] ${selected?.id === handoff.id ? "border-[var(--accent)] bg-[var(--accent-soft)]" : ""}`}>
@@ -304,8 +304,12 @@ export default function HandoffsPage() {
                       {handoff.archived_at ? "Archived" : STATUS_LABELS[handoff.status] || handoff.status}
                     </span>
                   </div>
+                  {handoff.customer_email && <p className="truncate text-xs text-[var(--accent)]">{handoff.customer_email}</p>}
                   <p className="mt-1 line-clamp-1 text-sm text-[var(--text-secondary)]">{handoff.reason}</p>
-                  <time className="mt-1 block text-xs text-[var(--text-secondary)]">{new Date(handoff.created_at).toLocaleString()}</time>
+                  <div className="mt-1 flex items-center justify-between text-xs text-[var(--text-secondary)]">
+                    <time>{new Date(handoff.created_at).toLocaleString()}</time>
+                    <span className="text-[11px] opacity-75">{handoff.conversation_id ? "From chat" : "Direct inquiry"}</span>
+                  </div>
                 </button>
               ))}
           {(page > 0 || hasMore) && <div className="flex justify-between pt-2">
@@ -319,13 +323,50 @@ export default function HandoffsPage() {
                 <>
                   <button type="button" onClick={() => { setSelected(null); selectedIdRef.current = null; }} className="mb-3 min-h-10 rounded-lg px-2 text-sm font-medium text-[var(--accent)] hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] lg:hidden">← Back to inbox</button>
                   <div className="border-b border-[var(--border)] pb-4">
-                    <h2 className="font-semibold text-[var(--text-primary)]">{selected.customer_name || "Website visitor"}</h2>
-                    {selected.customer_email && <a className="text-sm text-[var(--accent)] underline" href={`mailto:${selected.customer_email}`}>{selected.customer_email}</a>}
-                    <p className="mt-3 text-sm text-[var(--text-secondary)]"><strong>Reason:</strong> {selected.reason}</p>
-                    <select value={selected.status} disabled={saving || selected.status === "resolved"} onChange={(event) => void updateStatus(event.target.value)}
-                      className="mt-3 min-h-10 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--focus)] focus:ring-2 focus:ring-[var(--focus)]/20">
-                      {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h2 className="font-semibold text-[var(--text-primary)]">{selected.customer_name || "Website visitor"}</h2>
+                      <span className="text-xs text-[var(--text-secondary)]">
+                        {selected.conversation_id ? "Associated with AI chat session" : "Direct lead submission"}
+                      </span>
+                    </div>
+                    {selected.customer_email ? (
+                      <div className="mt-1 flex items-center gap-2">
+                        <a className="text-sm text-[var(--accent)] underline" href={`mailto:${selected.customer_email}`}>
+                          {selected.customer_email}
+                        </a>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-xs text-[var(--text-secondary)]">No email provided</p>
+                    )}
+                    <div className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3">
+                      <span className="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Inquiry</span>
+                      <p className="mt-1 text-sm text-[var(--text-primary)]">{selected.reason}</p>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <div>
+                        <label htmlFor="handoff-status-select" className="sr-only">Status</label>
+                        <select id="handoff-status-select" value={selected.status} disabled={saving || selected.status === "resolved"} onChange={(event) => void updateStatus(event.target.value)}
+                          className="min-h-10 rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition focus:border-[var(--focus)] focus:ring-2 focus:ring-[var(--focus)]/20">
+                          {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                      </div>
+                      <span className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium ${
+                        selected.status === "open"
+                          ? "bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)]"
+                          : selected.status === "in_progress"
+                            ? "bg-[color-mix(in_srgb,var(--warning,orange)_15%,transparent)] text-[var(--text-primary)]"
+                            : selected.status === "waiting_for_customer"
+                              ? "bg-[var(--surface-muted)] text-[var(--text-secondary)]"
+                              : "bg-[var(--success-soft)] text-[var(--success)]"
+                      }`}>
+                        {selected.status === "open" ? "Follow-up required" : selected.status === "in_progress" ? "Follow-up in progress" : selected.status === "waiting_for_customer" ? "Awaiting customer" : "Resolved"}
+                      </span>
+                      {selected.conversation_id && (
+                        <Link href={`/history?id=${encodeURIComponent(selected.conversation_id)}`} className="inline-flex min-h-9 items-center rounded-[var(--radius-control)] border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--accent-link)] transition hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]">
+                          Open Chat Context →
+                        </Link>
+                      )}
+                    </div>
                     {selected.status === "resolved" && <p className="mt-2 text-xs text-[var(--text-secondary)]">Resolved requests are final and cannot be reopened.</p>}
                     {selected.status === "resolved" && !selected.archived_at && <button type="button" disabled={saving} onClick={() => void setArchived(selected, true)} className="mt-3 min-h-10 rounded-[var(--radius-control)] border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Saving…" : "Archive"}</button>}
                     {selected.archived_at && <button type="button" disabled={saving} onClick={() => void setArchived(selected, false)} className="mt-3 min-h-10 rounded-[var(--radius-control)] border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Saving…" : "Restore to resolved"}</button>}
